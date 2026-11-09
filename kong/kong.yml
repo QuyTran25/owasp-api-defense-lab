@@ -1,0 +1,17 @@
+_format_version: "3.0"
+
+# ==============================================================================
+# STATE A — Baseline (Reverse-Proxy trần, chưa bật plugin bảo mật)
+# Phục vụ Tuần 1-2: Giữ nguyên topology Kali -> Kong:8000 -> VAmPI:5000
+# Các plugin (jwt, acl, rate-limiting) sẽ được bổ sung ở Tuần 3 (State B)
+# ==============================================================================
+
+services:
+  - name: vampi-service
+    url: http://vampi:5000
+    routes:
+      - name: vampi-route
+        paths:
+          - /
+        strip_path: false
+

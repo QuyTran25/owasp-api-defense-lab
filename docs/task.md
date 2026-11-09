@@ -20,23 +20,22 @@
 ### W1-VAMPI — Triển khai ứng dụng mục tiêu
 
 - [X] `W1-VAMPI-01` Clone mã nguồn VAmPI từ GitHub vào Ubuntu Server.
-- [ ] `W1-VAMPI-02` Build & chạy VAmPI qua Docker; xác nhận container healthy.
-- [ ] `W1-VAMPI-03` Kiểm tra công tắc bật/tắt chế độ `vulnerable` — test cả 2 trạng thái, ghi chú cách bật/tắt (biến môi trường/endpoint) vào README.
-- [ ] `W1-VAMPI-04` Tạo bộ dữ liệu test cố định: 2 tài khoản `victim` và `attacker` (và `admin` nếu kịch bản JWT cần) — **dùng xuyên suốt dự án, không tạo lại sau này**.
-- [ ] `W1-VAMPI-05` Đặt VAmPI ở chế độ **vulnerable** (chuẩn bị cho baseline Tuần 2).
+- [X] `W1-VAMPI-02` Build & chạy VAmPI qua Docker; xác nhận container healthy.
+- [X] `W1-VAMPI-03` Kiểm tra công tắc bật/tắt chế độ `vulnerable` — test cả 2 trạng thái, ghi chú cách bật/tắt (biến môi trường/endpoint) vào README.
+- [X] `W1-VAMPI-04` Tạo bộ dữ liệu test cố định: 2 tài khoản `victim` và `attacker` (và `admin` nếu kịch bản JWT cần) — **dùng xuyên suốt dự án, không tạo lại sau này**.
+- [X] `W1-VAMPI-05` Đặt VAmPI ở chế độ **vulnerable** (chuẩn bị cho baseline Tuần 2).
 
 ### W1-KONG — Khung Kong Gateway cơ bản
 
-- [ ] `W1-KONG-01` Pull image `kong:3.9.1` (ghim đúng version — **không dùng `latest`**).
-- [ ] `W1-KONG-02` Viết `kong.yml` tối thiểu (DB-less mode): 1 service trỏ tới VAmPI, 1 route — **chưa thêm plugin bảo mật nào**.
-- [ ] `W1-KONG-02` Viết `kong.yml` tối thiểu (DB-less mode): 1 service trỏ tới VAmPI, 1 route — **chưa thêm plugin bảo mật nào**.
-- [ ] `W1-KONG-03` Chạy Kong container, xác nhận request từ Kali qua Kong tới VAmPI trả về đúng kết quả (so với gọi thẳng VAmPI).
-- [ ] `W1-KONG-04` Xác nhận quy trình reload cấu hình (`kong reload` hoặc restart container) hoạt động ổn định — tránh phát sinh ở Tuần 3.
-- [ ] `W1-KONG-05` Commit `kong.yml` ban đầu vào Git.
+- [X] `W1-KONG-01` Pull image `kong:3.9.1` (ghim đúng version — **không dùng `latest`**).
+- [X] `W1-KONG-02` Viết `kong.yml` tối thiểu (DB-less mode): 1 service trỏ tới VAmPI, 1 route — **chưa thêm plugin bảo mật nào**.
+- [X] `W1-KONG-03` Chạy Kong container, xác nhận request từ Kali qua Kong tới VAmPI trả về đúng kết quả (so với gọi thẳng VAmPI).
+- [X] `W1-KONG-04` Xác nhận quy trình reload cấu hình (`kong reload` hoặc restart container) hoạt động ổn định — tránh phát sinh ở Tuần 3.
+- [X] `W1-KONG-05` Commit `kong.yml` ban đầu vào Git.
 
 ### W1-DOC — Tài liệu & kiến trúc
 
-- [ ] `W1-DOC-01` Vẽ sơ đồ kiến trúc hệ thống (Kali → Kong → VAmPI, kèm Docker network) — lưu vào `report/assets/`.
+- [X] `W1-DOC-01` Vẽ sơ đồ kiến trúc hệ thống (Kali → Kong → VAmPI, kèm Docker network) — lưu vào `docs/architecture.md`.
 - [X] `W1-DOC-02` Khởi tạo repo GitHub (README nháp, cấu trúc thư mục theo `plan.md` §4).
 
 **Checkpoint cuối Tuần 1** *(xem `plan.md` §5)*: Lab chạy được, bộ dữ liệu test đã chốt, sơ đồ kiến trúc đã có.
