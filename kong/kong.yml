@@ -1,17 +1,75 @@
 _format_version: "3.0"
 
 # ==============================================================================
-# STATE A — Baseline (Reverse-Proxy trần, chưa bật plugin bảo mật)
-# Phục vụ Tuần 1-2: Giữ nguyên topology Kali -> Kong:8000 -> VAmPI:5000
-# Các plugin (jwt, acl, rate-limiting) sẽ được bổ sung ở Tuần 3 (State B)
+# STATE B template — Kong DB-less declarative configuration.
+# deploy_state_b.sh renders this template to kong.runtime.yml using the
+# deployment-only VAMPI_JWT_SECRET. Do not put a real secret in this file.
 # ==============================================================================
+
+consumers:
+  - username: vampi-authenticated
+    custom_id: vampi-state-b
+    acls:
+      - group: authenticated
+    jwt_secrets:
+      # key must equal the `iss` claim VAmPI emits.
+      - key: vampi-state-b
+        algorithm: HS256
+        secret: __VAMPI_JWT_SECRET__
 
 services:
   - name: vampi-service
     url: http://vampi:5000
     routes:
-      - name: vampi-route
+      # Public endpoints remain reachable so a client can obtain a JWT.
+      - name: vampi-login-public
+        paths:
+          - /users/v1/login
+        methods:
+          - POST
+        strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              policy: local
+              limit_by: ip
+              minute: 5
+              fault_tolerant: true
+      - name: vampi-register-public
+        paths:
+          - /users/v1/register
+        methods:
+          - POST
+        strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              policy: local
+              limit_by: ip
+              minute: 5
+              fault_tolerant: true
+      # Every route not explicitly public requires a valid JWT and ACL group.
+      - name: vampi-protected
         paths:
           - /
         strip_path: false
+        plugins:
+          - name: jwt
+            config:
+              key_claim_name: iss
+              claims_to_verify:
+                - exp
+          - name: acl
+            config:
+              allow:
+                - authenticated
+              hide_groups_header: true
+          - name: rate-limiting
+            config:
+              policy: local
+              # One lab Consumer represents every VAmPI user, so rate-limit by
+              # source IP rather than putting all users in one Consumer bucket.
+              limit_by: ip
+              minute: 60
+              fault_tolerant: true
 

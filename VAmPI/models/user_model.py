@@ -32,7 +32,10 @@ class User(db.Model):
             payload = {
                 'exp': datetime.datetime.utcnow() + datetime.timedelta(days=0, seconds=alive),
                 'iat': datetime.datetime.utcnow(),
-                'sub': user_id
+                'sub': user_id,
+                # Kong JWT integration: `iss` selects the Kong JWT credential.
+                # It is an infrastructure identifier, not a business-role claim.
+                'iss': vuln_app.app.config.get('JWT_ISSUER')
             }
             return jwt.encode(
                 payload,
@@ -45,7 +48,12 @@ class User(db.Model):
     @staticmethod
     def decode_auth_token(auth_token):
         try:
-            payload = jwt.decode(auth_token, vuln_app.app.config.get('SECRET_KEY'), algorithms=["HS256"])
+            payload = jwt.decode(
+                auth_token,
+                vuln_app.app.config.get('SECRET_KEY'),
+                algorithms=["HS256"],
+                issuer=vuln_app.app.config.get('JWT_ISSUER')
+            )
             return payload
         except jwt.ExpiredSignatureError:
             return {'error': 'Signature expired. Please log in again.'}

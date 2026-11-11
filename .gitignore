@@ -1,0 +1,4 @@
+# State B runtime secrets and generated Kong configuration. Never commit these files.
+.env.state-b
+.state-b/
+kong/kong.runtime.yml
