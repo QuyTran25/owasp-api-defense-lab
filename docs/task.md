@@ -46,28 +46,28 @@
 
 ### W2-BOLA — Broken Object Level Authorization
 
-- [ ] `W2-BOLA-01` Xác định endpoint mục tiêu có tham số object ID (ví dụ `/users/{id}` hoặc tương đương trong VAmPI).
-- [ ] `W2-BOLA-02` Đăng nhập bằng `attacker`, bắt request bằng Burp Suite Proxy.
-- [ ] `W2-BOLA-03` Sửa tham số ID thành ID của `victim`, gửi lại (Repeater), xác nhận truy cập được dữ liệu không thuộc quyền.
-- [ ] `W2-BOLA-04` Export request/response từ Burp (`.txt`/XML), chụp màn hình → lưu vào `evidence/baseline/bola/`.
+- [X] `W2-BOLA-01` Xác định endpoint mục tiêu có tham số object ID (ví dụ `/users/{id}` hoặc tương đương trong VAmPI).
+- [X] `W2-BOLA-02` Đăng nhập bằng `attacker`, bắt request bằng Burp Suite Proxy.
+- [X] `W2-BOLA-03` Sửa tham số ID thành ID của `victim`, gửi lại (Repeater), xác nhận truy cập được dữ liệu không thuộc quyền.
+- [X] `W2-BOLA-04` Export request/response từ Burp (`.txt`/XML), chụp màn hình → lưu vào `evidence/baseline/bola/`.
 
 ### W2-JWT — Broken Authentication
 
-- [ ] `W2-JWT-01a` Trích xuất 1 JWT hợp lệ (của `victim` hoặc `attacker`) từ phiên đăng nhập.
-- [ ] `W2-JWT-01b` Dùng hashcat brute-force SECRET_KEY offline (ghi lại thời gian bẻ khóa — số liệu này sẽ dùng ở báo cáo).
-- [ ] `W2-JWT-01c` Dùng jwt.io (hoặc script) tạo token mới với payload `role=admin`, ký bằng SECRET_KEY vừa tìm được.
-- [ ] `W2-JWT-01d` Gửi request dùng token giả mạo tới 1 endpoint yêu cầu quyền admin — xác nhận được chấp nhận.
-- [ ] `W2-JWT-02a` Lấy & lưu lại token hiện tại của `victim`.
-- [ ] `W2-JWT-02b` Thực hiện đổi mật khẩu cho `victim` (qua API đổi mật khẩu của VAmPI).
-- [ ] `W2-JWT-02c` Replay lại token cũ đã lưu — kiểm tra còn dùng được không, ghi nhận kết quả (kể cả nếu VAmPI đã chặn — đây vẫn là dữ liệu hợp lệ).
-- [ ] `W2-JWT-03` Export toàn bộ log hashcat + request/response Burp cho cả (a) và (b) → lưu vào `evidence/baseline/jwt-auth/`.
+- [X] `W2-JWT-01a` Trích xuất 1 JWT hợp lệ (của `victim` hoặc `attacker`) từ phiên đăng nhập.
+- [X] `W2-JWT-01b` Dùng hashcat brute-force SECRET_KEY offline (ghi lại thời gian bẻ khóa — số liệu này sẽ dùng ở báo cáo).
+- [X] `W2-JWT-01c` Dùng jwt.io (hoặc script) tạo token mới với payload `role=admin`, ký bằng SECRET_KEY vừa tìm được.
+- [X] `W2-JWT-01d` Gửi request dùng token giả mạo tới 1 endpoint yêu cầu quyền admin — xác nhận được chấp nhận.
+- [X] `W2-JWT-02a` Lấy & lưu lại token hiện tại của `victim`.
+- [X] `W2-JWT-02b` Thực hiện đổi mật khẩu cho `victim` (qua API đổi mật khẩu của VAmPI).
+- [X] `W2-JWT-02c` Replay lại token cũ đã lưu — kiểm tra còn dùng được không, ghi nhận kết quả (kể cả nếu VAmPI đã chặn — đây vẫn là dữ liệu hợp lệ).
+- [X] `W2-JWT-03` Export toàn bộ log hashcat + request/response Burp cho cả (a) và (b) → lưu vào `evidence/baseline/jwt-auth/`.
 
 ### W2-EXPOSURE — Excessive Data Exposure
 
-- [ ] `W2-EXPOSURE-01` Liệt kê các endpoint trả thông tin user/profile.
-- [ ] `W2-EXPOSURE-02` Dùng Postman/Burp gọi từng endpoint, lưu toàn bộ response JSON.
-- [ ] `W2-EXPOSURE-03` Đối chiếu field trả về với field thực sự cần cho chức năng client — đánh dấu rõ field nhạy cảm dư thừa (password hash, token nội bộ, email không cần public...).
-- [ ] `W2-EXPOSURE-04` Lưu response JSON gốc + bảng đánh dấu field nhạy cảm → `evidence/baseline/data-exposure/`.
+- [X] `W2-EXPOSURE-01` Liệt kê endpoint user/profile: `GET /users/v1`, `GET /users/v1/_debug`, `GET /users/v1/{username}` và `GET /me`.
+- [X] `W2-EXPOSURE-02` Gọi các endpoint qua Kong port `8000` bằng curl trên Kali và lưu body JSON cùng response headers tại `~/w2-exposure/`.
+- [X] `W2-EXPOSURE-03` Đối chiếu field response: `/_debug` lộ `password` dạng rõ, `email` và `admin`; các endpoint public còn lại cũng công khai email.
+- [X] `W2-EXPOSURE-04` Lưu response JSON/header cục bộ tại `~/w2-exposure/`, chụp evidence và tạo báo cáo Word; file JWT tạm dùng cho `/me` đã được xóa.
 
 ### W2-WRAP — Tổng hợp Tuần 2
 
@@ -83,27 +83,30 @@
 
 ### W3-KONG — Lớp ngoài: Cấu hình plugin Kong
 
-- [ ] `W3-KONG-01` Sửa token issuance logic của VAmPI để thêm claim `iss` vào JWT (yêu cầu kỹ thuật của Kong JWT plugin) — ghi rõ trong code comment/commit rằng đây là thay đổi tích hợp, không phải logic nghiệp vụ.
-- [ ] `W3-KONG-02` Cấu hình Kong consumer + JWT credential tương ứng; thêm plugin `jwt` vào route VAmPI trong `kong.yml`.
-- [ ] `W3-KONG-03` Test nhanh: request có token hợp lệ (đã có `iss`) đi qua được Kong; request thiếu/sai token bị Kong chặn (401/403) — xác nhận chặn **tại Kong**, chưa chạm VAmPI (kiểm tra qua log VAmPI không ghi nhận request đó).
-- [ ] `W3-KONG-04` Thêm plugin `acl`, định nghĩa nhóm quyền, gán route theo nhóm.
-- [ ] `W3-KONG-05` Thêm plugin `rate-limiting`, cấu hình giới hạn request/phút theo IP hoặc consumer.
-- [ ] `W3-KONG-06` Test tổng hợp: VAmPI không còn truy cập trực tiếp được từ ngoài (chỉ qua Kong) — xác nhận bằng cách thử gọi thẳng port VAmPI từ Kali.
-- [ ] `W3-KONG-07` Commit `kong.yml` cập nhật + patch token issuance vào Git (commit riêng cho từng plugin).
+- [X] `W3-KONG-00` **Cô lập mạng trước tiên:** gỡ publish host port của VAmPI (không còn `5000:5000`); chỉ Kong proxy `:8000` được công khai và Kong Admin API `:8001` không được publish. Từ Kali, gọi thẳng VAmPI phải thất bại. *(Hoàn thành 2026-11-15; bằng chứng: `evidence/state-b/w3-kong-00/` và log runtime `.state-b/evidence/` trên Ubuntu.)*
+- [ ] `W3-KONG-01` Sửa issuance/validation JWT ở VAmPI: lấy `SECRET_KEY` ngẫu nhiên tối thiểu 256-bit từ biến môi trường, fail-closed khi thiếu secret; phát hành `iss`, `iat`, `exp`, `sub`; pin algorithm `HS256`; backend phải xác minh signature, algorithm, `iss`, `exp` và subject hợp lệ. Ghi rõ `iss` là tích hợp Kong, không phải logic nghiệp vụ. Chỉ thêm `aud` khi backend thực sự xác minh audience (không thêm claim chỉ để đủ trường).
+- [ ] `W3-KONG-02` Tách route public (login/register) và protected; cấu hình Kong Consumer + JWT credential, rồi thêm plugin `jwt` **chỉ** vào protected route trong `kong.yml`. Dùng `iss` làm credential key; login/register phải vẫn hoạt động không cần Bearer token.
+- [ ] `W3-KONG-03` Test và lưu evidence gateway: valid JWT đi qua protected route; token thiếu, sai chữ ký hoặc hết hạn bị Kong chặn `401/403`; request bị chặn không xuất hiện trong access log VAmPI. Đồng thời xác nhận route public hoạt động.
+- [ ] `W3-KONG-04` Thêm plugin `acl` theo nhóm coarse-grained tối thiểu `authenticated`. Ghi rõ trong tài liệu: ACL Kong chỉ lọc Consumer/group đã xác thực, **không** thay ownership check, RBAC hay quyền admin theo từng người dùng ở backend.
+- [ ] `W3-KONG-05` Thêm plugin `rate-limiting`: login/register theo IP; protected route theo IP trong lab một node (tránh một Consumer dùng chung tạo bucket chung cho mọi user). Chọn ngưỡng lab công khai trong `kong.yml`; chứng minh request vượt ngưỡng nhận `429`. Ghi chú `local` chỉ phù hợp một node, cần Redis/cluster khi scale.
+- [ ] `W3-KONG-06` Test tổng hợp State B: chỉ Kong `:8000` truy cập được; direct port VAmPI thất bại; JWT/ACL/rate-limit hoạt động đúng; lưu access log Kong và log VAmPI có request/correlation ID để chỉ rõ tầng chặn.
+- [ ] `W3-KONG-07` Commit theo đơn vị có thể rollback: (1) patch JWT issuance/validation, (2) JWT + ACL, (3) rate-limit + network. Không commit secret thật, `.env.state-b`, runtime config hay database; kiểm tra `git diff` trước mỗi commit.
 
 ### W3-BACKEND — Lớp trong: Vá mã nguồn Backend
 
-- [ ] `W3-BACKEND-01` Thêm ownership check tại endpoint đã khai thác BOLA ở `W2-BOLA` — verify `current_user.id == object.owner_id` trước khi trả dữ liệu.
-- [ ] `W3-BACKEND-02` Định nghĩa Access Control Matrix (vai trò × hành động) cho các route nhạy cảm; áp dụng kiểm tra quyền tương ứng.
-- [ ] `W3-BACKEND-03` Thêm lớp lọc field (whitelist) cho response của các endpoint đã ghi nhận ở `W2-EXPOSURE` — loại bỏ field nhạy cảm không cần thiết.
-- [ ] `W3-BACKEND-04` Thử tay (hoặc viết test nhỏ) xác nhận chức năng hợp lệ không bị hỏng: `victim` vẫn truy cập được dữ liệu của chính mình, đăng nhập/đổi mật khẩu vẫn hoạt động.
-- [ ] `W3-BACKEND-05` Lưu diff/patch (trước–sau) cho từng file đã sửa vào `lab/backend-patches/`.
-- [ ] `W3-BACKEND-06` Commit các bản vá Backend vào Git (commit riêng cho từng loại vá: BOLA / ACL / data filtering).
+- [ ] `W3-BACKEND-01` Vá BOLA theo nguyên tắc default-deny: thêm ownership check **ngay trong truy vấn** của endpoint đã khai thác ở `W2-BOLA`; user thường chỉ đọc object của mình; admin chỉ vượt ownership khi Access Control Matrix có policy tường minh.
+- [ ] `W3-BACKEND-02` Định nghĩa và version-control Access Control Matrix `(role × action × resource × điều kiện)` cho mọi route nhạy cảm; áp dụng kiểm tra quyền backend tương ứng. Không tin quyền chỉ vì request đã đi qua Kong, và không tin `role=admin` từ payload nếu chưa được backend xác thực theo policy.
+- [ ] `W3-BACKEND-03` Thêm response DTO/serializer **whitelist** cho endpoint `W2-EXPOSURE`; gỡ hẳn route `/_debug` cùng khai báo OpenAPI liên quan. Không trả password, password hash, token, secret, field nội bộ hoặc field quản trị không cần cho client.
+- [ ] `W3-BACKEND-04` Thêm token invalidation có trạng thái bằng `token_version`: đưa version vào JWT, tăng version khi đổi password và so sánh với bản ghi user ở mỗi request protected. Token cũ của `W2-JWT-02` phải bị backend từ chối `401` dù có thể vẫn qua kiểm tra chữ ký tại Kong.
+- [ ] `W3-BACKEND-05` Viết test nhỏ hoặc script assertion có thể chạy lại: victim đọc dữ liệu của mình thành công; attacker bị chặn BOLA; login/đổi password vẫn hoạt động; token cũ bị `401`; `/_debug` bị `404`; response không chứa field cấm. Lưu output pass/fail làm evidence State B.
+- [ ] `W3-BACKEND-06` Lưu diff/patch trước-sau cho từng file đã sửa vào `lab/backend-patches/`, rồi commit riêng theo loại vá: (1) BOLA/ACL backend, (2) data filtering/debug removal, (3) token lifecycle. Không đưa database, JWT hay secret thật vào commit.
 
 ### W3-WRAP — Tổng hợp Tuần 3
 
 - [ ] `W3-WRAP-01` Xác nhận hệ thống đã ở đúng **State B** (Kong đủ 3 plugin + Backend đã vá) mà không đổi topology tổng thể so với Tuần 1.
 - [ ] `W3-WRAP-02` Cập nhật sơ đồ kiến trúc (nếu có thay đổi so với bản Tuần 1) — đánh dấu rõ phần mới thêm (plugin, patch).
+- [ ] `W3-WRAP-03` Lưu evidence State B có cấu trúc: cấu hình đã sanitize, Kong access log, VAmPI log, request/response và kết quả test assertion. Chứng minh rõ request nào bị chặn tại Kong, request nào bị backend từ chối.
+- [ ] `W3-WRAP-04` Viết bảng mapping `W2 finding → W3 control → W3 test → W4 re-test` để tránh nhầm gateway control với backend control khi phân tích kết quả.
 
 **Checkpoint cuối Tuần 3**: Hệ thống phòng thủ hai lớp hoàn chỉnh, chức năng hợp lệ không bị hỏng.
 
@@ -170,3 +173,4 @@
 > Ghi lại mỗi khi phạm vi công việc thay đổi so với bản gốc, kèm ngày và lý do — giúp tránh xung đột khi nhìn lại tiến độ.
 
 - `2026-11-05` — Khởi tạo `task.md` từ `spec.md`/`plan.md`, bám sát đề cương gốc.
+- `2026-11-15` — Tinh chỉnh kế hoạch State B theo nguyên tắc defense-in-depth: làm rõ validation JWT, giới hạn của ACL Kong, rate-limit một node, token revocation có trạng thái, evidence logging và regression test.

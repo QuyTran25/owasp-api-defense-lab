@@ -1,0 +1,13 @@
+_format_version: "3.0"
+
+# State A proxy configuration retained for the W3-KONG-00 network-isolation
+# transition. It intentionally contains no JWT, ACL, or rate-limiting plugin.
+# Security plugins are introduced incrementally by W3-KONG-01 through 05.
+services:
+  - name: vampi-service
+    url: http://vampi:5000
+    routes:
+      - name: vampi-route
+        paths:
+          - /
+        strip_path: false
