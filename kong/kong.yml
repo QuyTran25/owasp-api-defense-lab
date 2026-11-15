@@ -28,27 +28,14 @@ services:
         methods:
           - POST
         strip_path: false
-        plugins:
-          - name: rate-limiting
-            config:
-              policy: local
-              limit_by: ip
-              minute: 5
-              fault_tolerant: true
       - name: vampi-register-public
         paths:
           - /users/v1/register
         methods:
           - POST
         strip_path: false
-        plugins:
-          - name: rate-limiting
-            config:
-              policy: local
-              limit_by: ip
-              minute: 5
-              fault_tolerant: true
-      # Every route not explicitly public requires a valid JWT and ACL group.
+      # Every route not explicitly public requires a valid JWT.
+      # ACL and rate-limiting are deliberately introduced in W3-KONG-04/05.
       - name: vampi-protected
         paths:
           - /
@@ -59,17 +46,4 @@ services:
               key_claim_name: iss
               claims_to_verify:
                 - exp
-          - name: acl
-            config:
-              allow:
-                - authenticated
-              hide_groups_header: true
-          - name: rate-limiting
-            config:
-              policy: local
-              # One lab Consumer represents every VAmPI user, so rate-limit by
-              # source IP rather than putting all users in one Consumer bucket.
-              limit_by: ip
-              minute: 60
-              fault_tolerant: true
 
