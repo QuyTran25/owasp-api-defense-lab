@@ -2,3 +2,6 @@
 .env.state-b
 .state-b/
 kong/kong.runtime.yml
+
+# Local screenshots and report evidence. Never commit these files.
+evidence/
