@@ -46,4 +46,11 @@ services:
               key_claim_name: iss
               claims_to_verify:
                 - exp
+          # Coarse-grained gateway control only. Object ownership and per-user
+          # admin authorization remain mandatory backend responsibilities.
+          - name: acl
+            config:
+              allow:
+                - authenticated
+              hide_groups_header: true
 
