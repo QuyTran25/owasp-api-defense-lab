@@ -28,12 +28,30 @@ services:
         methods:
           - POST
         strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              # Brute-force protection for public authentication endpoints.
+              policy: local
+              limit_by: ip
+              minute: 5
+              fault_tolerant: true
+              hide_client_headers: false
       - name: vampi-register-public
         paths:
           - /users/v1/register
         methods:
           - POST
         strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              # Registration is also public and receives the same IP quota.
+              policy: local
+              limit_by: ip
+              minute: 5
+              fault_tolerant: true
+              hide_client_headers: false
       # Every route not explicitly public requires a valid JWT.
       # ACL and rate-limiting are deliberately introduced in W3-KONG-04/05.
       - name: vampi-protected
@@ -53,4 +71,14 @@ services:
               allow:
                 - authenticated
               hide_groups_header: true
+          - name: rate-limiting
+            config:
+              # One Kong Consumer is shared by all VAmPI users in this lab;
+              # use client IP so users do not share one Consumer quota.
+              # `local` is intentional for this single-node lab only.
+              policy: local
+              limit_by: ip
+              minute: 60
+              fault_tolerant: true
+              hide_client_headers: false
 
