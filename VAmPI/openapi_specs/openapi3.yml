@@ -591,7 +591,8 @@ paths:
       summary: Retrieves book by title along with secret
       description: >-
         Retrieves book by title along with secret. Only the owner may retrieve
-        it
+        it, including administrators. Any future cross-owner administrative
+        access must use a separate explicitly authorized and audited endpoint.
       operationId: api_views.books.get_by_title
       parameters:
         - name: book_title
