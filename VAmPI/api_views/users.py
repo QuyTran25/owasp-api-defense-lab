@@ -77,6 +77,13 @@ def me():
         
 
 def get_by_username(username):
+    # Connexion matches this dynamic path for /users/v1/_debug after the
+    # dedicated debug operation was removed. Keep the retired path explicitly
+    # unavailable so an authenticated caller receives 404 rather than falling
+    # through to the profile authorization policy.
+    if username == '_debug':
+        return Response(error_message_helper("User not found"), 404, mimetype="application/json")
+
     user, error = get_authenticated_user(request.headers.get('Authorization'))
     if error is not None:
         return error
