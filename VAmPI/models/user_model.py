@@ -14,6 +14,9 @@ class User(db.Model):
     password = db.Column(db.String(128), nullable=False)
     email = db.Column(db.String(128), nullable=False)
     admin = db.Column(db.Boolean, nullable=False, default=False)
+    # State B: incrementing this revokes every JWT issued before a password
+    # change without rotating the deployment-wide signing key.
+    token_version = db.Column(db.Integer, nullable=False, default=0, server_default='0')
 
     books = relationship("Book", order_by=Book.id, back_populates="user")
 
@@ -22,6 +25,7 @@ class User(db.Model):
         self.email = email
         self.password = password
         self.admin = admin
+        self.token_version = 0
 
     def __repr__(self):
         return f'{{"username": "{self.username}", "email": "{self.email}"}}'
@@ -34,7 +38,10 @@ class User(db.Model):
                 'sub': user_id,
                 # Kong JWT integration: `iss` selects the Kong JWT credential.
                 # It is an infrastructure identifier, not a business-role claim.
-                'iss': vuln_app.app.config.get('JWT_ISSUER')
+                'iss': vuln_app.app.config.get('JWT_ISSUER'),
+                # Backend token-lifecycle control. Kong validates the JWT
+                # signature; VAmPI compares this value with its database.
+                'token_version': self.token_version,
             }
             return jwt.encode(
                 payload,
@@ -51,7 +58,8 @@ class User(db.Model):
                 auth_token,
                 vuln_app.app.config.get('SECRET_KEY'),
                 algorithms=["HS256"],
-                issuer=vuln_app.app.config.get('JWT_ISSUER')
+                issuer=vuln_app.app.config.get('JWT_ISSUER'),
+                options={'require': ['exp', 'iat', 'iss', 'sub', 'token_version']}
             )
             return payload
         except jwt.ExpiredSignatureError:

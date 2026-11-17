@@ -18,7 +18,7 @@ một user. `403` biểu thị token hợp lệ nhưng user không có quyền t
 | `GET /me` | Deny | Allow | Allow | Chỉ trả profile của subject hiện hành. |
 | `GET /users/v1/{username}` | Deny | Allow nếu `username == subject` | Allow | Admin lookup basic profile; user thường chỉ self. |
 | `PUT /users/v1/{username}/email` | Deny | Allow nếu `username == subject` | Allow nếu self | Không có cross-user update qua endpoint này. |
-| `PUT /users/v1/{username}/password` | Deny | Allow nếu `username == subject` | Allow nếu self | Không có cross-user password reset; token invalidation ở W3-BACKEND-04. |
+| `PUT /users/v1/{username}/password` | Deny | Allow nếu `username == subject` | Allow nếu self | Không có cross-user password reset; tăng `token_version`, khiến mọi token cũ bị backend từ chối; user phải đăng nhập lại. |
 | `DELETE /users/v1/{username}` | Deny | Deny | Allow, trừ self-delete | Role lấy từ database; bảo toàn ít nhất admin đang đăng nhập. |
 | `GET /users/v1` | Deny | Deny | Allow | Danh sách tài khoản chỉ phục vụ quản trị; DTO whitelist chỉ trả `username`. |
 | `GET /users/v1/_debug` | Disabled | Disabled | Disabled | Route bị gỡ hoàn toàn; không có API trả password hoặc field debug. |

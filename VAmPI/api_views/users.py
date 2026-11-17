@@ -45,6 +45,15 @@ def get_authenticated_user(auth_header):
     if not user:
         return None, unauthorized_response()
 
+    # A token remains cryptographically valid until exp, so signature checking
+    # alone cannot revoke it after a password change. Reject a missing,
+    # malformed, or stale version using the server-side account record.
+    token_version = payload.get('token_version')
+    if isinstance(token_version, bool) or not isinstance(token_version, int):
+        return None, unauthorized_response()
+    if token_version != user.token_version:
+        return None, unauthorized_response()
+
     return user, None
 
 
@@ -218,6 +227,10 @@ def update_password(username):
         return Response(error_message_helper("Malformed Data"), 400, mimetype="application/json")
 
     user.password = request_data.get('password')
+    # Revoke every previously issued access token for this user. The request
+    # itself was authenticated before the increment; subsequent requests must
+    # authenticate again and receive a JWT carrying the new version.
+    user.token_version += 1
     db.session.commit()
     responseObject = {
         'status': 'success',

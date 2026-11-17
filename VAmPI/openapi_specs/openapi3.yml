@@ -391,7 +391,10 @@ paths:
       tags:
         - users
       summary: Update users password
-      description: Update the authenticated user's own password only
+      description: >-
+        Update the authenticated user's own password only. A successful change
+        increments the server-side token version; all access tokens issued
+        before the change are rejected by VAmPI and the user must log in again.
       operationId: api_views.users.update_password
       parameters:
         - name: username
@@ -431,7 +434,7 @@ paths:
                     type: string
                     example: 'Malformed Data'
         '401':
-          description: User not authorized
+          description: Missing, expired, invalid, or revoked token
           content:
             application/json:
               schema:

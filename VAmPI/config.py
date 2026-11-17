@@ -3,6 +3,7 @@ import connexion
 from flask import jsonify
 from flask_sqlalchemy import SQLAlchemy
 from connexion.exceptions import ProblemException
+from sqlalchemy import inspect, text
 
 vuln_app = connexion.App(__name__, specification_dir='./openapi_specs')
 
@@ -20,6 +21,28 @@ vuln_app.app.config['SECRET_KEY'] = JWT_SECRET
 vuln_app.app.config['JWT_ISSUER'] = os.getenv('VAMPI_JWT_ISSUER', 'vampi-state-b')
 # start the db
 db = SQLAlchemy(vuln_app.app)
+
+
+def migrate_token_version_column():
+    """Apply the small, idempotent SQLite migration required by State B.
+
+    State B keeps the existing lab database in a bind mount. SQLAlchemy does
+    not add new columns to an existing SQLite table automatically, so create
+    ``token_version`` once without dropping user data.
+    """
+    with vuln_app.app.app_context():
+        inspector = inspect(db.engine)
+        if 'users' not in inspector.get_table_names():
+            return
+        columns = {column['name'] for column in inspector.get_columns('users')}
+        if 'token_version' not in columns:
+            db.session.execute(text(
+                'ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0'
+            ))
+            db.session.commit()
+
+
+migrate_token_version_column()
 
 def custom_problem_handler(error):
     # Custom error handler for clarity in structure
