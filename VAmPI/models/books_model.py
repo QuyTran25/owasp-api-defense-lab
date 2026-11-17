@@ -26,3 +26,7 @@ class Book(db.Model):
     @staticmethod
     def get_all_books():
         return [Book.json(user) for user in Book.query.all()]
+
+    @staticmethod
+    def get_books_for_user(user_id):
+        return [Book.json(book) for book in Book.query.filter_by(user_id=user_id).all()]

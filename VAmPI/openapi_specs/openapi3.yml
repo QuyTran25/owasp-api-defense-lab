@@ -13,24 +13,6 @@ components:
       bearerFormat: JWT
       x-bearerInfoFunc: models.user_model.User.decode_auth_token
 paths:
-  /createdb:
-    get:
-      tags:
-        - db-init
-      summary: Creates and populates the database with dummy data
-      description: Creates and populates the database with dummy data
-      operationId: api_views.main.populate_db
-      responses:
-        '200':
-          description: Creates and populates the database with dummy data
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: 'Database populated.'
   /:
     get:
       tags:
@@ -61,10 +43,12 @@ paths:
                     example: 1
   /users/v1:
     get:
+      security:
+        - bearerAuth: [ ]
       tags:
         - users
       summary: Retrieves all users
-      description: Displays all users with basic information
+      description: Displays basic user information for backend-verified administrators only
       operationId: api_views.users.get_all_users
       responses:
         '200':
@@ -79,44 +63,13 @@ paths:
                     items:
                       type: object
                       properties:
-                        email:
-                          type: string
-                          example: 'mail1@mail.com'
                         username:
                           type: string
                           example: 'name1'
-  /users/v1/_debug:
-    get:
-      tags:
-        - users
-      summary: Retrieves all details for all users
-      description: Displays all details for all users
-      operationId: api_views.users.debug
-      responses:
-        '200':
-          description: See all details of the users
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  users:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        admin:
-                          type: boolean
-                          example: false
-                        email:
-                          type: string
-                          example: 'mail1@mail.com'
-                        password:
-                          type: string
-                          example: 'pass1'
-                        username:
-                          type: string
-                          example: 'name1'
+        '401':
+          description: Missing, expired, or invalid token
+        '403':
+          description: Authenticated user is not a backend-verified administrator
   /users/v1/register:
     post:
       tags:
@@ -130,6 +83,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 username:
                   type: string
@@ -232,9 +186,6 @@ paths:
                     data:
                       type: object
                       properties:
-                        admin:
-                          type: boolean
-                          example: false
                         email:
                           type: string
                           example: 'mail1@mail.com'
@@ -262,10 +213,12 @@ paths:
 
   /users/v1/{username}:
     get:
+      security:
+        - bearerAuth: [ ]
       tags:
         - users
       summary: Retrieves user by username
-      description: Displays user by username
+      description: A user may retrieve their own profile; a backend-verified administrator may retrieve a profile
       operationId: api_views.users.get_by_username
       parameters:
         - name: username
@@ -303,6 +256,10 @@ paths:
                   message:
                     type: string
                     example: 'User not found'
+        '401':
+          description: Missing, expired, or invalid token
+        '403':
+          description: Authenticated user may only retrieve their own profile
 
     delete:
       security:
@@ -363,6 +320,8 @@ paths:
                   message:
                     type: string
                     example: 'User not found!'
+        '403':
+          description: Authenticated user is not a backend-verified administrator, or attempted self-delete
   /users/v1/{username}/email:
     put:
       security:
@@ -370,7 +329,7 @@ paths:
       tags:
         - users
       summary: Update users email
-      description: Update a single users email
+      description: Update the authenticated user's own email only
       operationId: api_views.users.update_email
       parameters:
         - name: username
@@ -423,6 +382,8 @@ paths:
                   message:
                     type: string
                     example: 'Invalid token. Please log in again.'
+        '403':
+          description: Authenticated user may only update their own email
   /users/v1/{username}/password:
     put:
       security:
@@ -430,7 +391,7 @@ paths:
       tags:
         - users
       summary: Update users password
-      description: Update users password
+      description: Update the authenticated user's own password only
       operationId: api_views.users.update_password
       parameters:
         - name: username
@@ -483,12 +444,16 @@ paths:
                   message:
                     type: string
                     example: 'Invalid token. Please log in again.'
+        '403':
+          description: Authenticated user may only update their own password
   /books/v1:
     get:
+      security:
+        - bearerAuth: [ ]
       tags:
         - books
       summary: Retrieves all books
-      description: Retrieves all books
+      description: Retrieves only books owned by the authenticated user
       operationId: api_views.books.get_all_books
       responses:
         '200':
@@ -511,10 +476,8 @@ paths:
                 Books:
                   - book_title: 'bookTitle77'
                     user: 'name1'
-                  - book_title: 'bookTitle85'
-                    user: 'name2'
-                  - book_title: 'bookTitle47'
-                    user: 'admin'
+        '401':
+          description: Missing, expired, or invalid token
     post:
       security:
         - bearerAuth: [ ]
@@ -582,6 +545,8 @@ paths:
                   message:
                     type: string
                     example: 'Invalid token. Please log in again.'
+        '403':
+          description: Authenticated user is not permitted to create a book
   /books/v1/{book_title}:
     get:
       security:
@@ -649,3 +614,5 @@ paths:
                   message:
                     type: string
                     example: 'Book not found!'
+        '403':
+          description: Authenticated user is not the book owner

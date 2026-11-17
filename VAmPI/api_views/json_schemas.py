@@ -1,5 +1,6 @@
 register_user_schema = {
     "type": "object",
+    "additionalProperties": False,
     "properties": {
         "username": {"type": "string"},
         "password": {"type": "string"},
@@ -10,6 +11,7 @@ register_user_schema = {
 
 login_user_schema = {
     "type": "object",
+    "additionalProperties": False,
     "properties": {
         "username": {"type": "string"},
         "password": {"type": "string"}
@@ -19,6 +21,7 @@ login_user_schema = {
 
 update_email_schema = {
     "type": "object",
+    "additionalProperties": False,
     "properties": {
         "email": {"type": "string"}
     },
@@ -27,6 +30,7 @@ update_email_schema = {
 
 add_book_schema = {
     "type": "object",
+    "additionalProperties": False,
     "properties": {
         "book_title": {"type": "string"},
         "secret": {"type": "string"}

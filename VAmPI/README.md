@@ -21,11 +21,9 @@ A quick rundown of the actions included can be seen in the following table:
 
 | **Action** |            **Path**           |                     **Details**                    |
 |:----------:|:-----------------------------:|:--------------------------------------------------:|
-|     GET    |           /createdb           | Creates and populates the database with dummy data |
 |     GET    |               /               |                     VAmPI home                     |
 |     GET    |               /me             |           Displays the user that is logged in       |
 |     GET    |           /users/v1           |      Displays all users with basic information     |
-|     GET    |        /users/v1/_debug       |         Displays all details for all users         |
 |    POST    |       /users/v1/register      |                  Register new user                 |
 |    POST    |        /users/v1/login        |                   Login to VAmPI                   |
 |     GET    |      /users/v1/{username}     |              Displays user by username             |
@@ -44,7 +42,7 @@ For more details you can either run VAmPI and visit `http://127.0.0.1:5000/ui/` 
  - Unauthorized Password Change
  - Broken Object Level Authorization
  - Mass Assignment
- - Excessive Data Exposure through debug endpoint
+ - Excessive Data Exposure through debug endpoint (State A only; removed in State B)
  - User and Password Enumeration
  - RegexDOS (Denial of Service)
  - Lack of Resources & Rate Limiting
@@ -92,7 +90,9 @@ If you would like to alter the timeout of the token created after login or if yo
 
 ## Frequently asked questions
  - **There is a database error upon reaching endpoints!**
-   - Make sure to issue a request towards the endpoint `/createdb` in order to populate the database.
+   - Do not expose a database-reset HTTP endpoint. In the State B deployment,
+     provision or restore the SQLite database through the deployment process
+     and its private bind mount.
 
  [Picture from freepik - www.freepik.com](https://www.freepik.com/vectors/party)
 

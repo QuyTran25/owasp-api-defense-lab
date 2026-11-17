@@ -16,74 +16,108 @@ def error_message_helper(msg):
         return '{ "status": "fail", "message": "' + msg + '"}'
 
 
+def unauthorized_response():
+    return Response(error_message_helper("Invalid token. Please log in again."),
+                    401, mimetype="application/json")
+
+
+def forbidden_response():
+    return Response(error_message_helper("You are not authorized to perform this action."),
+                    403, mimetype="application/json")
+
+
+def get_authenticated_user(auth_header):
+    """Resolve a verified JWT subject to a current database user.
+
+    Kong's JWT/ACL plugins are boundary controls. Authorization decisions here
+    deliberately use the application database so a shared Kong Consumer or an
+    untrusted JWT role claim cannot grant per-user or admin access.
+    """
+    payload = token_validator(auth_header)
+    if "error" in payload:
+        return None, unauthorized_response()
+
+    subject = payload.get('sub')
+    if not isinstance(subject, str) or not subject:
+        return None, unauthorized_response()
+
+    user = User.query.filter_by(username=subject).first()
+    if not user:
+        return None, unauthorized_response()
+
+    return user, None
+
+
+def get_admin_user(auth_header):
+    user, error = get_authenticated_user(auth_header)
+    if error is not None:
+        return None, error
+    if not user.admin:
+        return None, forbidden_response()
+    return user, None
+
+
 def get_all_users():
+    user, error = get_admin_user(request.headers.get('Authorization'))
+    if error is not None:
+        return error
     return_value = jsonify({'users': User.get_all_users()})
     return return_value
 
 
-def debug():
-    return_value = jsonify({'users': User.get_all_users_debug()})
-    return return_value
-
 def me():
-    resp = token_validator(request.headers.get('Authorization'))
-    if "error" in resp:
-        return Response(error_message_helper(resp), 401, mimetype="application/json")
-    else:
-        user = User.query.filter_by(username=resp['sub']).first()
-        responseObject = {
-            'status': 'success',
-            'data': {
-                'username': user.username,
-                'email': user.email,
-                'admin': user.admin
-            }
-        }
-        return Response(json.dumps(responseObject), 200, mimetype="application/json")
+    user, error = get_authenticated_user(request.headers.get('Authorization'))
+    if error is not None:
+        return error
+    responseObject = {
+        'status': 'success',
+        'data': user.profile_dto()
+    }
+    return Response(json.dumps(responseObject), 200, mimetype="application/json")
         
 
 def get_by_username(username):
-    if User.get_user(username):
-        return Response(str(User.get_user(username)), 200, mimetype="application/json")
-    else:
+    user, error = get_authenticated_user(request.headers.get('Authorization'))
+    if error is not None:
+        return error
+    if not user.admin and username != user.username:
+        return forbidden_response()
+
+    # Use an ORM equality lookup so the path parameter is never interpreted as
+    # SQL and the authorization decision stays independent of lab-mode flags.
+    target_user = User.query.filter_by(username=username).first()
+    if not target_user:
         return Response(error_message_helper("User not found"), 404, mimetype="application/json")
+    return jsonify(target_user.profile_dto())
 
 
 def register_user():
-    request_data = request.get_json()
-    # check if user already exists
-    user = User.query.filter_by(username=request_data.get('username')).first()
-    if not user:
-        try:
-            # validate the data are in the correct form
-            jsonschema.validate(request_data, register_user_schema)
-            if vuln and 'admin' in request_data:  # User is possible to define if she/he wants to be an admin !!
-                if request_data['admin']:
-                    admin = True
-                else:
-                    admin = False
-                user = User(username=request_data['username'], password=request_data['password'],
-                            email=request_data['email'], admin=admin)
-            else:
-                user = User(username=request_data['username'], password=request_data['password'],
-                            email=request_data['email'])
-            db.session.add(user)
-            db.session.commit()
+    request_data = request.get_json(silent=True)
+    try:
+        jsonschema.validate(request_data, register_user_schema)
+    except jsonschema.exceptions.ValidationError as exc:
+        return Response(error_message_helper(exc.message), 400, mimetype="application/json")
 
-            responseObject = {
-                'status': 'success',
-                'message': 'Successfully registered. Login to receive an auth token.'
-            }
-
-            return Response(json.dumps(responseObject), 200, mimetype="application/json")
-        except jsonschema.exceptions.ValidationError as exc:
-            return Response(error_message_helper(exc.message), 400, mimetype="application/json")
-    else:
+    user = User.query.filter_by(username=request_data['username']).first()
+    if user:
         return Response(error_message_helper("User already exists. Please Log in."), 200, mimetype="application/json")
+
+    # Public registration creates only a standard account. Privileged roles are
+    # assigned through a separate administrative process.
+    user = User(username=request_data['username'], password=request_data['password'],
+                email=request_data['email'])
+    db.session.add(user)
+    db.session.commit()
+
+    responseObject = {
+        'status': 'success',
+        'message': 'Successfully registered. Login to receive an auth token.'
+    }
+    return Response(json.dumps(responseObject), 200, mimetype="application/json")
 
 
 def login_user():
-    request_data = request.get_json()
+    request_data = request.get_json(silent=True)
 
     try:
         # validate the data are in the correct form
@@ -130,93 +164,71 @@ def token_validator(auth_header):
 
 
 def update_email(username):
-    request_data = request.get_json()
+    request_data = request.get_json(silent=True)
     try:
         jsonschema.validate(request_data, update_email_schema)
-    except:
+    except jsonschema.exceptions.ValidationError:
         return Response(error_message_helper("Please provide a proper JSON body."), 400, mimetype="application/json")
-    resp = token_validator(request.headers.get('Authorization'))
-    if "error" in resp:
-        return Response(error_message_helper(resp), 401, mimetype="application/json")
+    user, error = get_authenticated_user(request.headers.get('Authorization'))
+    if error is not None:
+        return error
+    if username != user.username:
+        return forbidden_response()
+
+    if vuln:  # Regex DoS
+        match = re.search(
+            r"^([0-9a-zA-Z]([-.\w]*[0-9a-zA-Z])*@{1}([0-9a-zA-Z][-\w]*[0-9a-zA-Z]\.)+[a-zA-Z]{2,9})$",
+            str(request_data.get('email')))
+        if not match:
+            return Response(error_message_helper("Please Provide a valid email address."), 400,
+                            mimetype="application/json")
     else:
-        user = User.query.filter_by(username=resp['sub']).first()
-        if vuln:  # Regex DoS
-            match = re.search(
-                r"^([0-9a-zA-Z]([-.\w]*[0-9a-zA-Z])*@{1}([0-9a-zA-Z][-\w]*[0-9a-zA-Z]\.)+[a-zA-Z]{2,9})$",
-                str(request_data.get('email')))
-            if match:
-                user.email = request_data.get('email')
-                db.session.commit()
-                responseObject = {
-                    'status': 'success',
-                    'data': {
-                        'username': user.username,
-                        'email': user.email
-                    }
-                }
-                return Response(json.dumps(responseObject), 204, mimetype="application/json")
-            else:
-                return Response(error_message_helper("Please Provide a valid email address."), 400,
-                                mimetype="application/json")
-        else:
-            regex = '^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w{2,3}$'
-            if (re.search(regex, request_data.get('email'))):
-                user.email = request_data.get('email')
-                db.session.commit()
-                responseObject = {
-                    'status': 'success',
-                    'data': {
-                        'username': user.username,
-                        'email': user.email
-                    }
-                }
-                return Response(json.dumps(responseObject), 204, mimetype="application/json")
-            else:
-                return Response(error_message_helper("Please Provide a valid email address."), 400,
-                                mimetype="application/json")
+        regex = r'^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w{2,3}$'
+        if not re.search(regex, request_data.get('email')):
+            return Response(error_message_helper("Please Provide a valid email address."), 400,
+                            mimetype="application/json")
+
+    user.email = request_data.get('email')
+    db.session.commit()
+    responseObject = {
+        'status': 'success',
+        'data': {
+            'username': user.username,
+            'email': user.email
+        }
+    }
+    return Response(json.dumps(responseObject), 204, mimetype="application/json")
 
 
 def update_password(username):
-    request_data = request.get_json()
-    resp = token_validator(request.headers.get('Authorization'))
-    if "error" in resp:
-        return Response(error_message_helper(resp), 401, mimetype="application/json")
-    else:
-        if request_data.get('password'):
-            if vuln:  # Unauthorized update of password of another user
-                user = User.query.filter_by(username=username).first()
-                if user:
-                    user.password = request_data.get('password')
-                    db.session.commit()
-                else:
-                    return Response(error_message_helper("User Not Found"), 400, mimetype="application/json")
-            else:
-                user = User.query.filter_by(username=resp['sub']).first()
-                user.password = request_data.get('password')
-                db.session.commit()
-            responseObject = {
-                'status': 'success',
-                'Password': 'Updated.'
-            }
-            return Response(json.dumps(responseObject), 204, mimetype="application/json")
-        else:
-            return Response(error_message_helper("Malformed Data"), 400, mimetype="application/json")
+    request_data = request.get_json(silent=True)
+    user, error = get_authenticated_user(request.headers.get('Authorization'))
+    if error is not None:
+        return error
+    if username != user.username:
+        return forbidden_response()
+    if not request_data or not request_data.get('password'):
+        return Response(error_message_helper("Malformed Data"), 400, mimetype="application/json")
+
+    user.password = request_data.get('password')
+    db.session.commit()
+    responseObject = {
+        'status': 'success',
+        'Password': 'Updated.'
+    }
+    return Response(json.dumps(responseObject), 204, mimetype="application/json")
 
 
 def delete_user(username):
-    resp = token_validator(request.headers.get('Authorization'))
-    if "error" in resp:
-        return Response(error_message_helper(resp), 401, mimetype="application/json")
-    else:
-        user = User.query.filter_by(username=resp['sub']).first()
-        if user.admin:
-            if bool(User.delete_user(username)):
-                responseObject = {
-                    'status': 'success',
-                    'message': 'User deleted.'
-                }
-                return Response(json.dumps(responseObject), 200, mimetype="application/json")
-            else:
-                return Response(error_message_helper("User not found!"), 404, mimetype="application/json")
-        else:
-            return Response(error_message_helper("Only Admins may delete users!"), 401, mimetype="application/json")
+    user, error = get_admin_user(request.headers.get('Authorization'))
+    if error is not None:
+        return error
+    if username == user.username:
+        return forbidden_response()
+    if bool(User.delete_user(username)):
+        responseObject = {
+            'status': 'success',
+            'message': 'User deleted.'
+        }
+        return Response(json.dumps(responseObject), 200, mimetype="application/json")
+    return Response(error_message_helper("User not found!"), 404, mimetype="application/json")
