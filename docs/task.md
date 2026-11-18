@@ -116,8 +116,8 @@
 
 ### W4-RETEST — Kiểm thử lại
 
-- [ ] `W4-RETEST-BOLA` Lặp lại chính xác `W2-BOLA-02`/`03` trên State B → ghi nhận kết quả (kỳ vọng: bị chặn/từ chối). *(Đã chuẩn bị `scripts/w4_retest_bola.py`; chỉ đánh dấu hoàn thành sau khi chạy thật qua Kong và đối chiếu log hai tầng.)*
-- [ ] `W4-RETEST-JWT-A` Lặp lại `W2-JWT-01a→d` trên State B → ghi nhận kết quả (kỳ vọng: token giả mạo bị Kong chặn trước khi tới Backend).
+- [X] `W4-RETEST-BOLA` Lặp lại chính xác `W2-BOLA-02`/`03` trên State B → ghi nhận kết quả (kỳ vọng: bị chặn/từ chối). *(Hoàn thành 2026-11-18: `w4_retest_bola.py` PASS; victim đọc `VictimDiary` `200`, attacker nhận `404` không có object data. Probe `w4bola-20261118-045626-attacker-foreign` xuất hiện ở cả Kong/VAmPI với `404`; SHA256 logs tại `.state-b/evidence/retest/bola/w4bola-20261118-045626/` đều OK, xác nhận backend ownership từ chối.)*
+- [ ] `W4-RETEST-JWT-A` Lặp lại `W2-JWT-01a→d` trên State B → ghi nhận kết quả (kỳ vọng: token giả mạo bị Kong chặn trước khi tới Backend). *(Đã chuẩn bị `scripts/w4_retest_jwt_forgery.py`; forged token chỉ ký bằng dummy secret local, không dùng secret runtime.)*
 - [ ] `W4-RETEST-JWT-B` Lặp lại `W2-JWT-02a→c` trên State B → ghi nhận kết quả, kể cả nếu giới hạn kỹ thuật vẫn còn tồn tại (ghi nhận trung thực).
 - [ ] `W4-RETEST-EXPOSURE` Lặp lại `W2-EXPOSURE-02` trên State B → so sánh field trả về với bảng đánh dấu ở Tuần 2.
 - [ ] `W4-RETEST-EVIDENCE` Lưu toàn bộ log/ảnh chụp re-test vào `evidence/retest/<lohong>/` theo đúng cấu trúc baseline.
