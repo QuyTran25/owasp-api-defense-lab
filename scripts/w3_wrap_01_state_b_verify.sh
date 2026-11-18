@@ -75,9 +75,11 @@ require_plugin() {
 
   echo
   echo '=== Active Kong controls ==='
-  docker exec kong-gateway kong config parse /etc/kong/kong.yml >/dev/null
+  kong_config_path="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' kong-gateway | sed -n 's/^KONG_DECLARATIVE_CONFIG=//p')"
+  kong_config_path="${kong_config_path:-/etc/kong/kong.yml}"
+  docker exec kong-gateway kong config parse "$kong_config_path" >/dev/null
   pass 'active Kong declarative config parses successfully'
-  active_plugins="$(docker exec kong-gateway sh -c "awk '/^[[:space:]]*-[[:space:]]+name:[[:space:]]+(jwt|acl|rate-limiting)[[:space:]]*$/{print \$3}' /etc/kong/kong.yml | sort -u")"
+  active_plugins="$(docker exec kong-gateway awk '/^[[:space:]]*-[[:space:]]+name:[[:space:]]+(jwt|acl|rate-limiting)[[:space:]]*$/{print $3}' "$kong_config_path" | sort -u)"
   printf 'Active security plugins: %s\n' "$(tr '\n' ' ' <<<"$active_plugins")"
   require_plugin jwt
   require_plugin acl

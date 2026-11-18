@@ -83,7 +83,7 @@ ROUTING="$OUT/probe-routing-summary.txt"
 
 # Do not first write an unredacted temporary file.  The stream is redacted
 # before it is persisted on disk.
-docker exec kong-gateway sh -c 'cat /etc/kong/kong.yml' | sanitize > "$CONFIG"
+docker exec kong-gateway sh -c 'cat "${KONG_DECLARATIVE_CONFIG:-/etc/kong/kong.yml}"' | sanitize > "$CONFIG"
 
 {
   echo '=== W3-WRAP-03 State B runtime snapshot ==='
