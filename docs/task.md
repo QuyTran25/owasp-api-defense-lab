@@ -120,14 +120,14 @@
 - [X] `W4-RETEST-JWT-A` Lặp lại `W2-JWT-01a→d` trên State B → ghi nhận kết quả (kỳ vọng: token giả mạo bị Kong chặn trước khi tới Backend). *(Hoàn thành 2026-11-18: valid JWT `/me` `200`; no-token và forged `admin=true` JWT ký bằng dummy secret đều `401`. Hai probe chặn `w4jwtforge-20261118-050306-no-token`/`-forged-admin` có tại Kong, vắng VAmPI; SHA256 logs `.state-b/evidence/retest/jwt-auth/w4jwtforge-20261118-050306/` đều OK.)*
 - [X] `W4-RETEST-JWT-B` Lặp lại `W2-JWT-02a→c` trên State B → ghi nhận kết quả, kể cả nếu giới hạn kỹ thuật vẫn còn tồn tại (ghi nhận trung thực). *(Hoàn thành 2026-11-18: `w4_retest_jwt_replay.py` PASS; token cũ `200` trước đổi password và `401` sau đổi, token mới/final token `200`, mật khẩu được restore. Probe `w4jwtreplay-20261118-050913-old-stale` xuất hiện ở cả Kong/VAmPI với `401`; SHA256 logs `.state-b/evidence/retest/jwt-auth/w4jwtreplay-20261118-050913/` đều OK, xác nhận backend `token_version` chặn replay.)*
 - [X] `W4-RETEST-EXPOSURE` Lặp lại `W2-EXPOSURE-02` trên State B → so sánh field trả về với bảng đánh dấu ở Tuần 2. *(Hoàn thành 2026-11-18: `w4_retest_exposure.py` PASS; `/me` chỉ `email`,`username` `200`; directory/victim profile `403`; `_debug`/`createdb` `404`. Cùng probe `w4exposure-20261118-051402` xuất hiện ở Kong/VAmPI với status tương ứng; SHA256 logs `.state-b/evidence/retest/exposure/w4exposure-20261118-051402/` đều OK.)*
-- [ ] `W4-RETEST-EVIDENCE` Lưu toàn bộ log/ảnh chụp re-test vào `evidence/retest/<lohong>/` theo đúng cấu trúc baseline. *(Đã chuẩn bị `scripts/w4_retest_evidence_index.py` để xác nhận bốn JSON result đã sanitize ở Kali; chỉ đánh dấu hoàn thành sau khi manifest và checksum được tạo.)*
+- [X] `W4-RETEST-EVIDENCE` Lưu toàn bộ log/ảnh chụp re-test vào `evidence/retest/<lohong>/` theo đúng cấu trúc baseline. *(Hoàn thành 2026-11-18: `w4_retest_evidence_index.py` PASS trên Kali; manifest `evidence/retest/w4-retest-manifest-20261118-051853.json` và checksum được tạo, xác nhận BOLA 4, JWT-A 4, JWT-B 9, Exposure 6 assertion PASS. Log Ubuntu của từng nhóm có SHA256SUMS OK; ảnh chụp giữ local, không commit.)*
 
 ### W4-ANALYSIS — Đối chiếu & số liệu
 
-- [ ] `W4-ANALYSIS-01` Dựng bảng đối chiếu trước/sau cho BOLA (HTTP status, dữ liệu rò rỉ có/không).
-- [ ] `W4-ANALYSIS-02` Dựng bảng đối chiếu trước/sau cho JWT (thời gian/khả năng bẻ khóa, hành vi replay, tầng nào chặn).
-- [ ] `W4-ANALYSIS-03` Dựng bảng đối chiếu trước/sau cho Excessive Data Exposure (field-by-field).
-- [ ] `W4-ANALYSIS-04` Viết nhận định về giới hạn kỹ thuật đã biết (Gateway không thay thế được logic nghiệp vụ; claim `iss` là yêu cầu tích hợp) — đối chiếu với `spec.md` §6.
+- [X] `W4-ANALYSIS-01` Dựng bảng đối chiếu trước/sau cho BOLA (HTTP status, dữ liệu rò rỉ có/không). *(Hoàn thành 2026-11-18: bảng tại `docs/w4-analysis.md` §2; baseline `200` rò dữ liệu so với re-test `404` không object data, có phân định backend ownership.)*
+- [X] `W4-ANALYSIS-02` Dựng bảng đối chiếu trước/sau cho JWT (thời gian/khả năng bẻ khóa, hành vi replay, tầng nào chặn). *(Hoàn thành 2026-11-18: `docs/w4-analysis.md` §3 phân biệt forged token bị Kong chặn với replay bị backend `token_version` từ chối; không bịa số liệu thời gian hashcat, yêu cầu trích log W2 local khi viết báo cáo.)*
+- [X] `W4-ANALYSIS-03` Dựng bảng đối chiếu trước/sau cho Excessive Data Exposure (field-by-field). *(Hoàn thành 2026-11-18: `docs/w4-analysis.md` §4 đối chiếu `_debug`, `createdb`, `/me`, directory, profile cross-user.)*
+- [X] `W4-ANALYSIS-04` Viết nhận định về giới hạn kỹ thuật đã biết (Gateway không thay thế được logic nghiệp vụ; claim `iss` là yêu cầu tích hợp) — đối chiếu với `spec.md` §6. *(Hoàn thành 2026-11-18: giới hạn và phạm vi áp dụng tại `docs/w4-analysis.md` §5.)*
 
 ### W4-REPORT — Báo cáo & tài liệu
 
