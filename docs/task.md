@@ -150,6 +150,22 @@
 
 ---
 
+## TUẦN 5 — Security Assurance Pipeline
+
+### W5-ASSURANCE — Tự kiểm chứng State B
+
+- [x] `W5-ASSURANCE-01` Khai báo version-control policy `finding -> control -> assertion -> enforcement layer` tại `security/security-assurance-policy.json`.
+- [x] `W5-ASSURANCE-02` Thêm runner Kali tái sử dụng bốn W4 re-test và chỉ tạo manifest đã sanitize.
+- [x] `W5-ASSURANCE-03` Thêm collector Ubuntu kiểm tra runtime invariant, thu hai log đã redact và SHA-256.
+- [x] `W5-ASSURANCE-04` Thêm verifier xuất JSON/HTML, trả `PASS`, `FAIL` hoặc `INCONCLUSIVE`; thiếu evidence không được coi là PASS.
+- [ ] `W5-ASSURANCE-05` Chạy assurance trên State B đang hoạt động từ Kali/Ubuntu, lưu evidence thật và chỉ ghi nhận PASS khi verifier xác minh đủ runtime, routing log và checksum.
+
+**Checkpoint W5**: một phiên assurance chỉ PASS khi HTTP assertion, runtime
+invariant, routing evidence và checksum cùng khớp policy. Hướng dẫn vận hành
+ở `docs/security-assurance-pipeline.md`.
+
+---
+
 ## Mục rủi ro & kế hoạch dự phòng (Contingency)
 
 ### Xử lý khi một kịch bản tấn công Tuần 2 không thành công ngay

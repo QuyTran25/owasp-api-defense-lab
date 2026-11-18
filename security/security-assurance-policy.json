@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "name": "State B Security Assurance Policy",
+  "scope": "Controlled VAmPI and Kong laboratory only",
+  "controls": [
+    {
+      "id": "BOLA-BOOK-OWNERSHIP",
+      "finding": "Broken Object Level Authorization",
+      "task": "W4-RETEST-BOLA",
+      "assertion": "Attacker denied victim object",
+      "expected_http": "HTTP 404",
+      "expected_layer": "backend",
+      "probe_suffix": "attacker-foreign"
+    },
+    {
+      "id": "JWT-NO-TOKEN-GATEWAY",
+      "finding": "Broken Authentication",
+      "task": "W4-RETEST-JWT-A",
+      "assertion": "No JWT rejected at gateway",
+      "expected_http": "HTTP 401",
+      "expected_layer": "gateway",
+      "probe_suffix": "no-token"
+    },
+    {
+      "id": "JWT-FORGED-TOKEN-GATEWAY",
+      "finding": "Broken Authentication",
+      "task": "W4-RETEST-JWT-A",
+      "assertion": "Forged admin JWT with dummy secret rejected at gateway",
+      "expected_http": "HTTP 401",
+      "expected_layer": "gateway",
+      "probe_suffix": "forged-admin"
+    },
+    {
+      "id": "JWT-REPLAY-REVOCATION",
+      "finding": "Broken Authentication",
+      "task": "W4-RETEST-JWT-B",
+      "assertion": "Old token replay rejected",
+      "expected_http": "HTTP 401",
+      "expected_layer": "backend",
+      "probe_suffix": "old-stale"
+    },
+    {
+      "id": "PROFILE-DTO-WHITELIST",
+      "finding": "Excessive Data Exposure",
+      "task": "W4-RETEST-EXPOSURE",
+      "assertion": "Profile DTO whitelist",
+      "expected_http": "HTTP 200",
+      "expected_layer": "backend",
+      "probe_suffix": "me"
+    },
+    {
+      "id": "USER-DIRECTORY-AUTHORIZATION",
+      "finding": "Broken Function and Data Authorization",
+      "task": "W4-RETEST-EXPOSURE",
+      "assertion": "User directory unavailable to non-admin",
+      "expected_http": "HTTP 403",
+      "expected_layer": "backend",
+      "probe_suffix": "directory"
+    },
+    {
+      "id": "RETIRED-DEBUG-ENDPOINT",
+      "finding": "Excessive Data Exposure",
+      "task": "W4-RETEST-EXPOSURE",
+      "assertion": "Retired debug endpoint",
+      "expected_http": "HTTP 404",
+      "expected_layer": "backend",
+      "probe_suffix": "debug"
+    }
+  ],
+  "runtime_invariants": [
+    "VAMPI-NO-HOST-PORT",
+    "KONG-PROXY-8000-ONLY",
+    "KONG-SECURITY-PLUGINS"
+  ],
+  "evidence_policy": {
+    "forbidden": ["password", "secret", "auth_token", "jwt", "authorization"],
+    "required_artifacts": ["kali-manifest.json", "runtime-assertions.json", "kong.log", "vampi.log", "SHA256SUMS"]
+  }
+}
