@@ -103,8 +103,8 @@
 
 ### W3-WRAP — Tổng hợp Tuần 3
 
-- [ ] `W3-WRAP-01` Xác nhận hệ thống đã ở đúng **State B** (Kong đủ 3 plugin + Backend đã vá) mà không đổi topology tổng thể so với Tuần 1.
-- [ ] `W3-WRAP-02` Cập nhật sơ đồ kiến trúc (nếu có thay đổi so với bản Tuần 1) — đánh dấu rõ phần mới thêm (plugin, patch).
+- [X] `W3-WRAP-01` Xác nhận hệ thống đã ở đúng **State B** (Kong đủ 3 plugin + Backend đã vá) mà không đổi topology tổng thể so với Tuần 1. *(Hoàn thành 2026-11-18: `w3_wrap_01_state_b_verify.sh` PASS 18 assertions trên Ubuntu; VAmPI/Kong cùng `lab-net`, VAmPI không host port, chỉ Kong `:8000` public, Admin API không publish, active Kong có JWT/ACL/rate-limiting, backend có ownership/ACL/DTO/retired-route/token_version; evidence local `.state-b/evidence/w3-wrap-01-20261118-033959.txt`.)*
+- [X] `W3-WRAP-02` Cập nhật sơ đồ kiến trúc (nếu có thay đổi so với bản Tuần 1) — đánh dấu rõ phần mới thêm (plugin, patch). *(Hoàn thành 2026-11-18: `docs/architecture.md` giữ State A làm baseline và thêm sơ đồ State B, luồng hợp lệ/bị chặn, bảng thay đổi và phân định trách nhiệm Kong ↔ backend; đánh dấu JWT/ACL/rate-limiting, ownership/ACL DB, DTO/retired routes và token_version.)*
 - [ ] `W3-WRAP-03` Lưu evidence State B có cấu trúc: cấu hình đã sanitize, Kong access log, VAmPI log, request/response và kết quả test assertion. Chứng minh rõ request nào bị chặn tại Kong, request nào bị backend từ chối.
 - [ ] `W3-WRAP-04` Viết bảng mapping `W2 finding → W3 control → W3 test → W4 re-test` để tránh nhầm gateway control với backend control khi phân tích kết quả.
 
