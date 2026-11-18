@@ -137,10 +137,25 @@ def login(
     )
     remaining = headers.get("X-RateLimit-Remaining-Minute") or headers.get("RateLimit-Remaining")
     suffix = f" rate_limit_remaining={remaining}" if remaining is not None else ""
-    run_assertion(results, label, status, 200, response_message(body) + suffix)
-    if not isinstance(body, dict) or not isinstance(body.get("auth_token"), str):
-        raise RegressionFailure(f"{label}: server returned 200 without an auth_token.")
-    return body["auth_token"], headers
+    token = body.get("auth_token") if isinstance(body, dict) else None
+    passed = status == 200 and isinstance(token, str) and bool(token)
+    detail = response_message(body) + suffix
+    results.append(
+        {
+            "name": label,
+            "expected": "HTTP 200 with auth_token",
+            "actual": status,
+            "passed": passed,
+            "detail": detail,
+        }
+    )
+    marker = "PASS" if passed else "FAIL"
+    print(f"[{marker}] {label}: HTTP {status} (expected 200 with auth_token)")
+    if not passed:
+        if status == 200:
+            raise RegressionFailure(f"{label}: login was rejected: {detail or 'response has no auth_token'}")
+        raise RegressionFailure(f"{label}: expected HTTP 200, got {status}. {detail}".strip())
+    return token, headers
 
 
 def ensure_login_budget(headers: dict[str, str]) -> None:
