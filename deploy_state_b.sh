@@ -49,7 +49,7 @@ chmod 600 "$PROJECT_DIR/kong/kong.runtime.yml"
 
 # Validate the DB-less file before touching the container that holds W2 data.
 docker pull kong:3.9.1
-docker run --rm --entrypoint kong \
+docker run --rm --user 0:0 --entrypoint kong \
   -e KONG_DATABASE=off \
   -v "$PROJECT_DIR/kong/kong.runtime.yml:/etc/kong/kong.yml:ro" \
   kong:3.9.1 config parse /etc/kong/kong.yml >/dev/null
