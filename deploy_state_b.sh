@@ -9,6 +9,7 @@ STATE_DIR="${STATE_DIR:-$PROJECT_DIR/.state-b}"
 ENV_FILE="${ENV_FILE:-$PROJECT_DIR/.env.state-b}"
 VAMPI_CONTAINER="${VAMPI_CONTAINER:-vampi}"
 KONG_CONTAINER="${KONG_CONTAINER:-kong-gateway}"
+KONG_RUNTIME_VOLUME="${KONG_RUNTIME_VOLUME:-state-b-kong-runtime}"
 NETWORK="${NETWORK:-lab-net}"
 REPLACE_VAMPI=false
 
@@ -55,6 +56,21 @@ docker run --rm --user 0:0 --entrypoint kong \
   kong:3.9.1 config parse /etc/kong/kong.yml >/dev/null
 echo "Kong declarative configuration validated."
 
+# Keep the rendered configuration owner-only on the host.  Kong's image runs
+# as the unprivileged `kong` user, so copy it to a Docker-managed volume with
+# matching ownership rather than widening the host file to mode 0644.
+docker volume create "$KONG_RUNTIME_VOLUME" >/dev/null
+docker run --rm --user 0:0 --entrypoint sh \
+  -v "$KONG_RUNTIME_VOLUME:/runtime" \
+  -v "$PROJECT_DIR/kong/kong.runtime.yml:/source/kong.yml:ro" \
+  kong:3.9.1 -ec '
+    cp /source/kong.yml /runtime/kong.yml.new
+    chown kong:kong /runtime/kong.yml.new
+    chmod 640 /runtime/kong.yml.new
+    mv /runtime/kong.yml.new /runtime/kong.yml
+  '
+echo "Kong runtime configuration prepared in Docker volume."
+
 if docker inspect "$VAMPI_CONTAINER" >/dev/null 2>&1; then
   if [[ "$REPLACE_VAMPI" != true ]]; then
     echo "Existing $VAMPI_CONTAINER detected. Review the database backup then rerun with --replace-vampi."
@@ -95,11 +111,11 @@ docker run -d --name "$KONG_CONTAINER" \
   --network "$NETWORK" \
   -p 8000:8000 \
   -e KONG_DATABASE=off \
-  -e KONG_DECLARATIVE_CONFIG=/etc/kong/kong.yml \
+  -e KONG_DECLARATIVE_CONFIG=/runtime/kong.yml \
   -e KONG_PROXY_ACCESS_LOG=/dev/stdout \
   -e KONG_PROXY_ERROR_LOG=/dev/stderr \
   -e KONG_ADMIN_LISTEN=127.0.0.1:8001 \
-  -v "$PROJECT_DIR/kong/kong.runtime.yml:/etc/kong/kong.yml:ro" \
+  -v "$KONG_RUNTIME_VOLUME:/runtime:ro" \
   kong:3.9.1
 
 echo "State B containers started. Wait for readiness, then run the W3-KONG-03/05 tests from Kali."

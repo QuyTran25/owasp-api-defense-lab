@@ -27,7 +27,7 @@ chmod 600 .env.state-b
 
 The explicit `--replace-vampi` flag is required because the operation stops and recreates the application container. It is not a command to run until the test database backup has been checked.
 
-Before removing VAmPI, the script renders the ignored runtime configuration and runs `kong config parse` in the pinned `kong:3.9.1` image with `KONG_DATABASE=off`. The parser runs as root only to read the deliberately owner-only (`0600`) bind-mounted runtime configuration; the deployed Kong container does not receive this elevation. A malformed `kong.yml` therefore stops the deployment before the W2 database container is changed. If a prior deployment stopped VAmPI, the script retains the stopped container long enough to back up its SQLite database; it does not fail merely because there is nothing left to stop.
+Before removing VAmPI, the script renders the ignored runtime configuration and runs `kong config parse` in the pinned `kong:3.9.1` image with `KONG_DATABASE=off`. The parser runs as root only to read the deliberately owner-only (`0600`) bind-mounted runtime configuration. After validation, a short-lived root container copies that configuration to the Docker-managed `state-b-kong-runtime` volume, marks it `0640`, and assigns it to the `kong` account. The deployed Kong container mounts only that volume read-only and remains unprivileged; the host runtime file is never widened to world-readable mode. A malformed `kong.yml` therefore stops the deployment before the W2 database container is changed. If a prior deployment stopped VAmPI, the script retains the stopped container long enough to back up its SQLite database; it does not fail merely because there is nothing left to stop.
 
 ## First validation on Ubuntu
 
