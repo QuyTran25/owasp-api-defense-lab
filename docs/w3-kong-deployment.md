@@ -27,7 +27,7 @@ chmod 600 .env.state-b
 
 The explicit `--replace-vampi` flag is required because the operation stops and recreates the application container. It is not a command to run until the test database backup has been checked.
 
-Before removing VAmPI, the script renders the ignored runtime configuration and runs `kong config parse` in the pinned `kong:3.9.1` image. A malformed `kong.yml` therefore stops the deployment before the W2 database container is changed.
+Before removing VAmPI, the script renders the ignored runtime configuration and runs `kong config parse` in the pinned `kong:3.9.1` image with `KONG_DATABASE=off`. A malformed `kong.yml` therefore stops the deployment before the W2 database container is changed. If a prior deployment stopped VAmPI, the script retains the stopped container long enough to back up its SQLite database; it does not fail merely because there is nothing left to stop.
 
 ## First validation on Ubuntu
 

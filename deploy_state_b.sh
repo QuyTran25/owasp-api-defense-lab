@@ -50,6 +50,7 @@ chmod 600 "$PROJECT_DIR/kong/kong.runtime.yml"
 # Validate the DB-less file before touching the container that holds W2 data.
 docker pull kong:3.9.1
 docker run --rm --entrypoint kong \
+  -e KONG_DATABASE=off \
   -v "$PROJECT_DIR/kong/kong.runtime.yml:/etc/kong/kong.yml:ro" \
   kong:3.9.1 config parse /etc/kong/kong.yml >/dev/null
 echo "Kong declarative configuration validated."
@@ -59,8 +60,13 @@ if docker inspect "$VAMPI_CONTAINER" >/dev/null 2>&1; then
     echo "Existing $VAMPI_CONTAINER detected. Review the database backup then rerun with --replace-vampi."
     exit 1
   fi
-  # Stop first so the SQLite database is not copied while an application write is in flight.
-  docker stop "$VAMPI_CONTAINER" >/dev/null
+  # Stop first when necessary so SQLite is not copied during an application
+  # write.  A previous failed deployment can leave the container stopped;
+  # Docker then rejects `docker stop`, although a stopped container is safe to
+  # back up with `docker cp`.
+  if [[ "$(docker inspect --format '{{.State.Running}}' "$VAMPI_CONTAINER")" == "true" ]]; then
+    docker stop "$VAMPI_CONTAINER" >/dev/null
+  fi
   backup="$STATE_DIR/backups/database-$(date +%Y%m%d-%H%M%S).db"
   docker cp "$VAMPI_CONTAINER:/vampi/database/database.db" "$backup"
   cp "$backup" "$STATE_DIR/database/database.db"
