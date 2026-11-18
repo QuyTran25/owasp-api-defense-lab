@@ -130,7 +130,7 @@ graph LR
 2026-11-18: VAmPI/Kong cùng `lab-net`, VAmPI không có host port, chỉ Kong
 `:8000` được publish, ba plugin active và tất cả marker backend State B có
 mặt trong container đang chạy. Regression W3-BACKEND-05 chạy từ Kali cũng PASS
-14 assertion, xác nhận chức năng hợp lệ không bị hỏng.
+18 assertion, xác nhận chức năng hợp lệ không bị hỏng.
 
 Evidence runtime nằm tại `.state-b/evidence/` trên Ubuntu và `evidence/` tại
 clone Kali; các thư mục này được Git ignore để không commit log, JWT, database
