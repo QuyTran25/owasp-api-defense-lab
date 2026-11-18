@@ -118,8 +118,8 @@
 
 - [X] `W4-RETEST-BOLA` Lặp lại chính xác `W2-BOLA-02`/`03` trên State B → ghi nhận kết quả (kỳ vọng: bị chặn/từ chối). *(Hoàn thành 2026-11-18: `w4_retest_bola.py` PASS; victim đọc `VictimDiary` `200`, attacker nhận `404` không có object data. Probe `w4bola-20261118-045626-attacker-foreign` xuất hiện ở cả Kong/VAmPI với `404`; SHA256 logs tại `.state-b/evidence/retest/bola/w4bola-20261118-045626/` đều OK, xác nhận backend ownership từ chối.)*
 - [X] `W4-RETEST-JWT-A` Lặp lại `W2-JWT-01a→d` trên State B → ghi nhận kết quả (kỳ vọng: token giả mạo bị Kong chặn trước khi tới Backend). *(Hoàn thành 2026-11-18: valid JWT `/me` `200`; no-token và forged `admin=true` JWT ký bằng dummy secret đều `401`. Hai probe chặn `w4jwtforge-20261118-050306-no-token`/`-forged-admin` có tại Kong, vắng VAmPI; SHA256 logs `.state-b/evidence/retest/jwt-auth/w4jwtforge-20261118-050306/` đều OK.)*
-- [ ] `W4-RETEST-JWT-B` Lặp lại `W2-JWT-02a→c` trên State B → ghi nhận kết quả, kể cả nếu giới hạn kỹ thuật vẫn còn tồn tại (ghi nhận trung thực). *(Đã chuẩn bị `scripts/w4_retest_jwt_replay.py`; script tự khôi phục mật khẩu ban đầu sau test.)*
-- [ ] `W4-RETEST-EXPOSURE` Lặp lại `W2-EXPOSURE-02` trên State B → so sánh field trả về với bảng đánh dấu ở Tuần 2.
+- [X] `W4-RETEST-JWT-B` Lặp lại `W2-JWT-02a→c` trên State B → ghi nhận kết quả, kể cả nếu giới hạn kỹ thuật vẫn còn tồn tại (ghi nhận trung thực). *(Hoàn thành 2026-11-18: `w4_retest_jwt_replay.py` PASS; token cũ `200` trước đổi password và `401` sau đổi, token mới/final token `200`, mật khẩu được restore. Probe `w4jwtreplay-20261118-050913-old-stale` xuất hiện ở cả Kong/VAmPI với `401`; SHA256 logs `.state-b/evidence/retest/jwt-auth/w4jwtreplay-20261118-050913/` đều OK, xác nhận backend `token_version` chặn replay.)*
+- [ ] `W4-RETEST-EXPOSURE` Lặp lại `W2-EXPOSURE-02` trên State B → so sánh field trả về với bảng đánh dấu ở Tuần 2. *(Đã chuẩn bị `scripts/w4_retest_exposure.py`; chỉ lưu HTTP status và tên field, không lưu response body.)*
 - [ ] `W4-RETEST-EVIDENCE` Lưu toàn bộ log/ảnh chụp re-test vào `evidence/retest/<lohong>/` theo đúng cấu trúc baseline.
 
 ### W4-ANALYSIS — Đối chiếu & số liệu
