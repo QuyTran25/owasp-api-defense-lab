@@ -1,0 +1,125 @@
+From b555c3d5f128b59873ddc2cc7fcdbce572be8b5b Mon Sep 17 00:00:00 2001
+From: QuyTran25 <tranhuynhlt46@gmail.com>
+Date: Mon, 16 Nov 2026 13:25:55 +0700
+Subject: =?UTF-8?q?W3-BACKEND-01:=20v=C3=A1=20BOLA=20ki=E1=BB=83m=20tra=20?=
+ =?UTF-8?q?ownership=20book?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ VAmPI/api_views/books.py         | 58 ++++++++++++++++++--------------
+ VAmPI/openapi_specs/openapi3.yml |  3 +-
+ docs/task.md                     |  8 ++---
+ 3 files changed, 39 insertions(+), 30 deletions(-)
+
+diff --git a/VAmPI/api_views/books.py b/VAmPI/api_views/books.py
+index f153b1c..1ae3fc0 100644
+--- a/VAmPI/api_views/books.py
++++ b/VAmPI/api_views/books.py
+@@ -6,7 +6,6 @@ from api_views.json_schemas import *
+ from flask import jsonify, Response, request, json
+ from models.user_model import User
+ from models.books_model import Book
+-from app import vuln
+ 
+ 
+ def get_all_books():
+@@ -46,27 +45,36 @@ def get_by_title(book_title):
+     resp = token_validator(request.headers.get('Authorization'))
+     if "error" in resp:
+         return Response(error_message_helper(resp), 401, mimetype="application/json")
+-    else:
+-        if vuln:  # Broken Object Level Authorization
+-            book = Book.query.filter_by(book_title=str(book_title)).first()
+-            if book:
+-                responseObject = {
+-                    'book_title': book.book_title,
+-                    'secret': book.secret_content,
+-                    'owner': book.user.username
+-                }
+-                return Response(json.dumps(responseObject), 200, mimetype="application/json")
+-            else:
+-                return Response(error_message_helper("Book not found!"), 404, mimetype="application/json")
+-        else:
+-            user = User.query.filter_by(username=resp['sub']).first()
+-            book = Book.query.filter_by(user=user, book_title=str(book_title)).first()
+-            if book:
+-                responseObject = {
+-                    'book_title': book.book_title,
+-                    'secret': book.secret_content,
+-                    'owner': book.user.username
+-                }
+-                return Response(json.dumps(responseObject), 200, mimetype="application/json")
+-            else:
+-                return Response(error_message_helper("Book not found!"), 404, mimetype="application/json")
+\ No newline at end of file
++
++    # W3-BACKEND-01: enforce object-level authorization at the backend.
++    # Kong only authenticates a coarse-grained Consumer; it cannot decide who
++    # owns a specific book. Resolve the signed subject to the server-side user
++    # record, then apply ownership as part of the database lookup.
++    subject = resp.get('sub')
++    if not isinstance(subject, str) or not subject:
++        return Response(error_message_helper("Invalid token. Please log in again."),
++                        401, mimetype="application/json")
++
++    user = User.query.filter_by(username=subject).first()
++    if not user:
++        # A valid JWT for a deleted/non-existent account is not an authorized
++        # principal. Avoid a server error and fail closed.
++        return Response(error_message_helper("Invalid token. Please log in again."),
++                        401, mimetype="application/json")
++
++    # Default-deny policy, including for administrators: this endpoint returns
++    # secret content, so no cross-owner access is granted here. Administrative
++    # access, if needed later, must use a separate explicitly-authorized and
++    # audited endpoint. Include owner user_id in the query itself; a foreign
++    # title therefore has the same 404 result as an absent title.
++    book = Book.query.filter_by(book_title=str(book_title), user_id=user.id).first()
++
++    if not book:
++        return Response(error_message_helper("Book not found!"), 404, mimetype="application/json")
++
++    responseObject = {
++        'book_title': book.book_title,
++        'secret': book.secret_content,
++        'owner': book.user.username
++    }
++    return Response(json.dumps(responseObject), 200, mimetype="application/json")
+diff --git a/VAmPI/openapi_specs/openapi3.yml b/VAmPI/openapi_specs/openapi3.yml
+index 744de6d..2935129 100644
+--- a/VAmPI/openapi_specs/openapi3.yml
++++ b/VAmPI/openapi_specs/openapi3.yml
+@@ -591,7 +591,8 @@ paths:
+       summary: Retrieves book by title along with secret
+       description: >-
+         Retrieves book by title along with secret. Only the owner may retrieve
+-        it
++        it, including administrators. Any future cross-owner administrative
++        access must use a separate explicitly authorized and audited endpoint.
+       operationId: api_views.books.get_by_title
+       parameters:
+         - name: book_title
+diff --git a/docs/task.md b/docs/task.md
+index add89ad..83b9a1e 100644
+--- a/docs/task.md
++++ b/docs/task.md
+@@ -87,10 +87,10 @@
+ - [X] `W3-KONG-01` Sửa issuance/validation JWT ở VAmPI: lấy `SECRET_KEY` ngẫu nhiên tối thiểu 256-bit từ biến môi trường, fail-closed khi thiếu secret; phát hành `iss`, `iat`, `exp`, `sub`; pin algorithm `HS256`; backend phải xác minh signature, algorithm, `iss`, `exp` và subject hợp lệ. Ghi rõ `iss` là tích hợp Kong, không phải logic nghiệp vụ. Chỉ thêm `aud` khi backend thực sự xác minh audience (không thêm claim chỉ để đủ trường). *(Hoàn thành 2026-11-15: secret runtime 64 ký tự, JWT claim test PASS, `/me` trả 200; bằng chứng local tại `evidence/state-b/w3-kong-01/`.)*
+ - [X] `W3-KONG-02` Tách route public (login/register) và protected; cấu hình Kong Consumer + JWT credential, rồi thêm plugin `jwt` **chỉ** vào protected route trong `kong.yml`. Dùng `iss` làm credential key; login/register phải vẫn hoạt động không cần Bearer token. *(Hoàn thành 2026-11-16: login public `200`; `/me` thiếu token `401`; `/me` với JWT hợp lệ `200`; bằng chứng local tại `evidence/state-b/w3-kong-02/`.)*
+ - [X] `W3-KONG-03` Test và lưu evidence gateway: valid JWT đi qua protected route; token thiếu, sai chữ ký hoặc hết hạn bị Kong chặn `401/403`; request bị chặn không xuất hiện trong access log VAmPI. Đồng thời xác nhận route public hoạt động. *(Hoàn thành 2026-11-16: valid `200`; thiếu token, sai chữ ký và hết hạn đều `401`; ba probe có trong Kong log và vắng mặt trong VAmPI log; bằng chứng local tại `evidence/state-b/w3-kong-03/`.)*
+-- [ ] `W3-KONG-04` Thêm plugin `acl` theo nhóm coarse-grained tối thiểu `authenticated`. Ghi rõ trong tài liệu: ACL Kong chỉ lọc Consumer/group đã xác thực, **không** thay ownership check, RBAC hay quyền admin theo từng người dùng ở backend.
+-- [ ] `W3-KONG-05` Thêm plugin `rate-limiting`: login/register theo IP; protected route theo IP trong lab một node (tránh một Consumer dùng chung tạo bucket chung cho mọi user). Chọn ngưỡng lab công khai trong `kong.yml`; chứng minh request vượt ngưỡng nhận `429`. Ghi chú `local` chỉ phù hợp một node, cần Redis/cluster khi scale.
+-- [ ] `W3-KONG-06` Test tổng hợp State B: chỉ Kong `:8000` truy cập được; direct port VAmPI thất bại; JWT/ACL/rate-limit hoạt động đúng; lưu access log Kong và log VAmPI có request/correlation ID để chỉ rõ tầng chặn.
+-- [ ] `W3-KONG-07` Commit theo đơn vị có thể rollback: (1) patch JWT issuance/validation, (2) JWT + ACL, (3) rate-limit + network. Không commit secret thật, `.env.state-b`, runtime config hay database; kiểm tra `git diff` trước mỗi commit.
++- [X] `W3-KONG-04` Thêm plugin `acl` theo nhóm coarse-grained tối thiểu `authenticated`. Ghi rõ trong tài liệu: ACL Kong chỉ lọc Consumer/group đã xác thực, **không** thay ownership check, RBAC hay quyền admin theo từng người dùng ở backend. *(Hoàn thành 2026-11-16: login public `200`; JWT ánh xạ Consumer group `authenticated` qua `/me` `200`; thiếu token `401`; bằng chứng local tại `evidence/state-b/w3-kong-04/`.)*
++- [X] `W3-KONG-05` Thêm plugin `rate-limiting`: login/register theo IP; protected route theo IP trong lab một node (tránh một Consumer dùng chung tạo bucket chung cho mọi user). Chọn ngưỡng lab công khai trong `kong.yml`; chứng minh request vượt ngưỡng nhận `429`. Ghi chú `local` chỉ phù hợp một node, cần Redis/cluster khi scale. *(Hoàn thành 2026-11-16: login 5 lần `200`, lần 6 `429`; protected 60 lần `200`, lần 61 `429`; có `Retry-After` và rate-limit headers; bằng chứng local tại `evidence/state-b/w3-kong-05/`.)*
++- [X] `W3-KONG-06` Test tổng hợp State B: chỉ Kong `:8000` truy cập được; direct port VAmPI thất bại; JWT/ACL/rate-limit hoạt động đúng; lưu access log Kong và log VAmPI có request/correlation ID để chỉ rõ tầng chặn. *(Hoàn thành 2026-11-16: direct `:5000` thất bại; login `200`; protected không token `401`; JWT+ACL `200`; header rate-limit `60`; Kong/VAmPI logs xác nhận đúng tầng chặn; bằng chứng local tại `evidence/state-b/w3-kong-06/`.)*
++- [X] `W3-KONG-07` Commit theo đơn vị có thể rollback: (1) patch JWT issuance/validation, (2) JWT + ACL, (3) rate-limit + network. Không commit secret thật, `.env.state-b`, runtime config hay database; kiểm tra `git diff` trước mỗi commit. *(Hoàn thành 2026-11-16: audit trên Ubuntu xác nhận `974b8c3`; `.env.state-b`, `.state-b/`, `kong/kong.runtime.yml` và `evidence/` đều bị ignore; bằng chứng local tại `evidence/state-b/w3-kong-07/`.)*
+ 
+ ### W3-BACKEND — Lớp trong: Vá mã nguồn Backend
+ 
+-- 
+2.56.0.windows.4
+

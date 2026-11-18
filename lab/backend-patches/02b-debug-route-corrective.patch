@@ -1,0 +1,34 @@
+From 45f83e67b06aa68368be8986f406406c2b22e676 Mon Sep 17 00:00:00 2001
+From: QuyTran25 <tranhuynhlt46@gmail.com>
+Date: Tue, 17 Nov 2026 22:16:33 +0700
+Subject: =?UTF-8?q?W3-BACKEND-03:=20tr=E1=BA=A3=20404=20cho=20debug=20?=
+ =?UTF-8?q?=C4=91=C3=A3=20g=E1=BB=A1?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ VAmPI/api_views/users.py | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/VAmPI/api_views/users.py b/VAmPI/api_views/users.py
+index b05e989..a11a284 100644
+--- a/VAmPI/api_views/users.py
++++ b/VAmPI/api_views/users.py
+@@ -77,6 +77,13 @@ def me():
+         
+ 
+ def get_by_username(username):
++    # Connexion matches this dynamic path for /users/v1/_debug after the
++    # dedicated debug operation was removed. Keep the retired path explicitly
++    # unavailable so an authenticated caller receives 404 rather than falling
++    # through to the profile authorization policy.
++    if username == '_debug':
++        return Response(error_message_helper("User not found"), 404, mimetype="application/json")
++
+     user, error = get_authenticated_user(request.headers.get('Authorization'))
+     if error is not None:
+         return error
+-- 
+2.56.0.windows.4
+

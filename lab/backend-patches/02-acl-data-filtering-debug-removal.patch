@@ -1,0 +1,869 @@
+From e0c7037612ac73a384af0e99e8b8e6bbc443cfbb Mon Sep 17 00:00:00 2001
+From: QuyTran25 <tranhuynhlt46@gmail.com>
+Date: Tue, 17 Nov 2026 22:06:20 +0700
+Subject: =?UTF-8?q?W3-BACKEND-02,03:=20si=E1=BA=BFt=20ACL=20v=C3=A0=20?=
+ =?UTF-8?q?=E1=BA=A9n=20d=E1=BB=AF=20li=E1=BB=87u=20nh=E1=BA=A1y=20c?=
+ =?UTF-8?q?=E1=BA=A3m?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ VAmPI/README.md                  |   8 +-
+ VAmPI/api_views/books.py         |  71 ++++----
+ VAmPI/api_views/json_schemas.py  |   4 +
+ VAmPI/api_views/main.py          |   9 -
+ VAmPI/api_views/users.py         | 272 ++++++++++++++++---------------
+ VAmPI/models/books_model.py      |   4 +
+ VAmPI/models/user_model.py       |  36 ++--
+ VAmPI/openapi_specs/openapi3.yml |  97 ++++-------
+ docs/access-control-matrix.md    |  38 +++++
+ 9 files changed, 268 insertions(+), 271 deletions(-)
+ create mode 100644 docs/access-control-matrix.md
+
+diff --git a/VAmPI/README.md b/VAmPI/README.md
+index 4fb7bd1..938b182 100644
+--- a/VAmPI/README.md
++++ b/VAmPI/README.md
+@@ -21,11 +21,9 @@ A quick rundown of the actions included can be seen in the following table:
+ 
+ | **Action** |            **Path**           |                     **Details**                    |
+ |:----------:|:-----------------------------:|:--------------------------------------------------:|
+-|     GET    |           /createdb           | Creates and populates the database with dummy data |
+ |     GET    |               /               |                     VAmPI home                     |
+ |     GET    |               /me             |           Displays the user that is logged in       |
+ |     GET    |           /users/v1           |      Displays all users with basic information     |
+-|     GET    |        /users/v1/_debug       |         Displays all details for all users         |
+ |    POST    |       /users/v1/register      |                  Register new user                 |
+ |    POST    |        /users/v1/login        |                   Login to VAmPI                   |
+ |     GET    |      /users/v1/{username}     |              Displays user by username             |
+@@ -44,7 +42,7 @@ For more details you can either run VAmPI and visit `http://127.0.0.1:5000/ui/`
+  - Unauthorized Password Change
+  - Broken Object Level Authorization
+  - Mass Assignment
+- - Excessive Data Exposure through debug endpoint
++ - Excessive Data Exposure through debug endpoint (State A only; removed in State B)
+  - User and Password Enumeration
+  - RegexDOS (Denial of Service)
+  - Lack of Resources & Rate Limiting
+@@ -92,7 +90,9 @@ If you would like to alter the timeout of the token created after login or if yo
+ 
+ ## Frequently asked questions
+  - **There is a database error upon reaching endpoints!**
+-   - Make sure to issue a request towards the endpoint `/createdb` in order to populate the database.
++   - Do not expose a database-reset HTTP endpoint. In the State B deployment,
++     provision or restore the SQLite database through the deployment process
++     and its private bind mount.
+ 
+  [Picture from freepik - www.freepik.com](https://www.freepik.com/vectors/party)
+ 
+diff --git a/VAmPI/api_views/books.py b/VAmPI/api_views/books.py
+index 1ae3fc0..64a9bf1 100644
+--- a/VAmPI/api_views/books.py
++++ b/VAmPI/api_views/books.py
+@@ -1,6 +1,6 @@
+ import jsonschema
+ 
+-from api_views.users import token_validator, error_message_helper
++from api_views.users import get_authenticated_user, error_message_helper
+ from config import db
+ from api_views.json_schemas import *
+ from flask import jsonify, Response, request, json
+@@ -9,58 +9,51 @@ from models.books_model import Book
+ 
+ 
+ def get_all_books():
+-    return_value = jsonify({'Books': Book.get_all_books()})
++    user, error = get_authenticated_user(request.headers.get('Authorization'))
++    if error is not None:
++        return error
++    return_value = jsonify({'Books': Book.get_books_for_user(user.id)})
+     return return_value
+ 
+ 
+ def add_new_book():
+-    request_data = request.get_json()
++    request_data = request.get_json(silent=True)
+     try:
+         jsonschema.validate(request_data, add_book_schema)
+-    except:
++    except jsonschema.exceptions.ValidationError:
+         return Response(error_message_helper("Please provide a proper JSON body."), 400, mimetype="application/json")
+-    resp = token_validator(request.headers.get('Authorization'))
+-    if "error" in resp:
+-        return Response(error_message_helper(resp), 401, mimetype="application/json")
+-    else:
+-        user = User.query.filter_by(username=resp['sub']).first()
++    user, error = get_authenticated_user(request.headers.get('Authorization'))
++    if error is not None:
++        return error
+ 
+-        # check if user already has this book title
+-        book = Book.query.filter_by(user=user, book_title=request_data.get('book_title')).first()
+-        if book:
+-            return Response(error_message_helper("Book Already exists!"), 400, mimetype="application/json")
+-        else:
+-            newBook = Book(book_title=request_data.get('book_title'), secret_content=request_data.get('secret'),
+-                           user_id=user.id)
+-            db.session.add(newBook)
+-            db.session.commit()
+-            responseObject = {
+-                'status': 'success',
+-                'message': 'Book has been added.'
+-            }
+-            return Response(json.dumps(responseObject), 200, mimetype="application/json")
++    # `book_title` is globally unique in the existing SQLite schema. Check it
++    # before writing so a collision is a controlled 400 rather than a database
++    # integrity error. Ownership is still taken only from the authenticated
++    # database user, never from the request body.
++    book = Book.query.filter_by(book_title=request_data.get('book_title')).first()
++    if book:
++        return Response(error_message_helper("Book title is unavailable."), 400, mimetype="application/json")
++
++    newBook = Book(book_title=request_data.get('book_title'), secret_content=request_data.get('secret'),
++                   user_id=user.id)
++    db.session.add(newBook)
++    db.session.commit()
++    responseObject = {
++        'status': 'success',
++        'message': 'Book has been added.'
++    }
++    return Response(json.dumps(responseObject), 200, mimetype="application/json")
+ 
+ 
+ def get_by_title(book_title):
+-    resp = token_validator(request.headers.get('Authorization'))
+-    if "error" in resp:
+-        return Response(error_message_helper(resp), 401, mimetype="application/json")
++    user, error = get_authenticated_user(request.headers.get('Authorization'))
++    if error is not None:
++        return error
+ 
+     # W3-BACKEND-01: enforce object-level authorization at the backend.
+     # Kong only authenticates a coarse-grained Consumer; it cannot decide who
+-    # owns a specific book. Resolve the signed subject to the server-side user
+-    # record, then apply ownership as part of the database lookup.
+-    subject = resp.get('sub')
+-    if not isinstance(subject, str) or not subject:
+-        return Response(error_message_helper("Invalid token. Please log in again."),
+-                        401, mimetype="application/json")
+-
+-    user = User.query.filter_by(username=subject).first()
+-    if not user:
+-        # A valid JWT for a deleted/non-existent account is not an authorized
+-        # principal. Avoid a server error and fail closed.
+-        return Response(error_message_helper("Invalid token. Please log in again."),
+-                        401, mimetype="application/json")
++    # owns a specific book. The shared helper resolves the signed subject to
++    # the server-side user record before ownership is applied in this query.
+ 
+     # Default-deny policy, including for administrators: this endpoint returns
+     # secret content, so no cross-owner access is granted here. Administrative
+diff --git a/VAmPI/api_views/json_schemas.py b/VAmPI/api_views/json_schemas.py
+index 62986f8..3521093 100644
+--- a/VAmPI/api_views/json_schemas.py
++++ b/VAmPI/api_views/json_schemas.py
+@@ -1,5 +1,6 @@
+ register_user_schema = {
+     "type": "object",
++    "additionalProperties": False,
+     "properties": {
+         "username": {"type": "string"},
+         "password": {"type": "string"},
+@@ -10,6 +11,7 @@ register_user_schema = {
+ 
+ login_user_schema = {
+     "type": "object",
++    "additionalProperties": False,
+     "properties": {
+         "username": {"type": "string"},
+         "password": {"type": "string"}
+@@ -19,6 +21,7 @@ login_user_schema = {
+ 
+ update_email_schema = {
+     "type": "object",
++    "additionalProperties": False,
+     "properties": {
+         "email": {"type": "string"}
+     },
+@@ -27,6 +30,7 @@ update_email_schema = {
+ 
+ add_book_schema = {
+     "type": "object",
++    "additionalProperties": False,
+     "properties": {
+         "book_title": {"type": "string"},
+         "secret": {"type": "string"}
+diff --git a/VAmPI/api_views/main.py b/VAmPI/api_views/main.py
+index 6cb8a05..e1a0328 100644
+--- a/VAmPI/api_views/main.py
++++ b/VAmPI/api_views/main.py
+@@ -1,16 +1,7 @@
+ from flask import Response
+ 
+-from models.user_model import *
+ from app import vuln
+ 
+-def populate_db():
+-    db.drop_all()
+-    db.create_all()
+-    User.init_db_users()
+-    response_text = '{ "message": "Database populated." }'
+-    response = Response(response_text, 200, mimetype='application/json')
+-    return response
+-
+ def basic():
+     response_text = '{ "message": "VAmPI the Vulnerable API", "help": "VAmPI is a vulnerable on purpose API. It was ' \
+                     'created in order to evaluate the efficiency of third party tools in identifying vulnerabilities ' \
+diff --git a/VAmPI/api_views/users.py b/VAmPI/api_views/users.py
+index 172540a..b05e989 100644
+--- a/VAmPI/api_views/users.py
++++ b/VAmPI/api_views/users.py
+@@ -16,74 +16,108 @@ def error_message_helper(msg):
+         return '{ "status": "fail", "message": "' + msg + '"}'
+ 
+ 
++def unauthorized_response():
++    return Response(error_message_helper("Invalid token. Please log in again."),
++                    401, mimetype="application/json")
++
++
++def forbidden_response():
++    return Response(error_message_helper("You are not authorized to perform this action."),
++                    403, mimetype="application/json")
++
++
++def get_authenticated_user(auth_header):
++    """Resolve a verified JWT subject to a current database user.
++
++    Kong's JWT/ACL plugins are boundary controls. Authorization decisions here
++    deliberately use the application database so a shared Kong Consumer or an
++    untrusted JWT role claim cannot grant per-user or admin access.
++    """
++    payload = token_validator(auth_header)
++    if "error" in payload:
++        return None, unauthorized_response()
++
++    subject = payload.get('sub')
++    if not isinstance(subject, str) or not subject:
++        return None, unauthorized_response()
++
++    user = User.query.filter_by(username=subject).first()
++    if not user:
++        return None, unauthorized_response()
++
++    return user, None
++
++
++def get_admin_user(auth_header):
++    user, error = get_authenticated_user(auth_header)
++    if error is not None:
++        return None, error
++    if not user.admin:
++        return None, forbidden_response()
++    return user, None
++
++
+ def get_all_users():
++    user, error = get_admin_user(request.headers.get('Authorization'))
++    if error is not None:
++        return error
+     return_value = jsonify({'users': User.get_all_users()})
+     return return_value
+ 
+ 
+-def debug():
+-    return_value = jsonify({'users': User.get_all_users_debug()})
+-    return return_value
+-
+ def me():
+-    resp = token_validator(request.headers.get('Authorization'))
+-    if "error" in resp:
+-        return Response(error_message_helper(resp), 401, mimetype="application/json")
+-    else:
+-        user = User.query.filter_by(username=resp['sub']).first()
+-        responseObject = {
+-            'status': 'success',
+-            'data': {
+-                'username': user.username,
+-                'email': user.email,
+-                'admin': user.admin
+-            }
+-        }
+-        return Response(json.dumps(responseObject), 200, mimetype="application/json")
++    user, error = get_authenticated_user(request.headers.get('Authorization'))
++    if error is not None:
++        return error
++    responseObject = {
++        'status': 'success',
++        'data': user.profile_dto()
++    }
++    return Response(json.dumps(responseObject), 200, mimetype="application/json")
+         
+ 
+ def get_by_username(username):
+-    if User.get_user(username):
+-        return Response(str(User.get_user(username)), 200, mimetype="application/json")
+-    else:
++    user, error = get_authenticated_user(request.headers.get('Authorization'))
++    if error is not None:
++        return error
++    if not user.admin and username != user.username:
++        return forbidden_response()
++
++    # Use an ORM equality lookup so the path parameter is never interpreted as
++    # SQL and the authorization decision stays independent of lab-mode flags.
++    target_user = User.query.filter_by(username=username).first()
++    if not target_user:
+         return Response(error_message_helper("User not found"), 404, mimetype="application/json")
++    return jsonify(target_user.profile_dto())
+ 
+ 
+ def register_user():
+-    request_data = request.get_json()
+-    # check if user already exists
+-    user = User.query.filter_by(username=request_data.get('username')).first()
+-    if not user:
+-        try:
+-            # validate the data are in the correct form
+-            jsonschema.validate(request_data, register_user_schema)
+-            if vuln and 'admin' in request_data:  # User is possible to define if she/he wants to be an admin !!
+-                if request_data['admin']:
+-                    admin = True
+-                else:
+-                    admin = False
+-                user = User(username=request_data['username'], password=request_data['password'],
+-                            email=request_data['email'], admin=admin)
+-            else:
+-                user = User(username=request_data['username'], password=request_data['password'],
+-                            email=request_data['email'])
+-            db.session.add(user)
+-            db.session.commit()
+-
+-            responseObject = {
+-                'status': 'success',
+-                'message': 'Successfully registered. Login to receive an auth token.'
+-            }
++    request_data = request.get_json(silent=True)
++    try:
++        jsonschema.validate(request_data, register_user_schema)
++    except jsonschema.exceptions.ValidationError as exc:
++        return Response(error_message_helper(exc.message), 400, mimetype="application/json")
+ 
+-            return Response(json.dumps(responseObject), 200, mimetype="application/json")
+-        except jsonschema.exceptions.ValidationError as exc:
+-            return Response(error_message_helper(exc.message), 400, mimetype="application/json")
+-    else:
++    user = User.query.filter_by(username=request_data['username']).first()
++    if user:
+         return Response(error_message_helper("User already exists. Please Log in."), 200, mimetype="application/json")
+ 
++    # Public registration creates only a standard account. Privileged roles are
++    # assigned through a separate administrative process.
++    user = User(username=request_data['username'], password=request_data['password'],
++                email=request_data['email'])
++    db.session.add(user)
++    db.session.commit()
++
++    responseObject = {
++        'status': 'success',
++        'message': 'Successfully registered. Login to receive an auth token.'
++    }
++    return Response(json.dumps(responseObject), 200, mimetype="application/json")
++
+ 
+ def login_user():
+-    request_data = request.get_json()
++    request_data = request.get_json(silent=True)
+ 
+     try:
+         # validate the data are in the correct form
+@@ -130,93 +164,71 @@ def token_validator(auth_header):
+ 
+ 
+ def update_email(username):
+-    request_data = request.get_json()
++    request_data = request.get_json(silent=True)
+     try:
+         jsonschema.validate(request_data, update_email_schema)
+-    except:
++    except jsonschema.exceptions.ValidationError:
+         return Response(error_message_helper("Please provide a proper JSON body."), 400, mimetype="application/json")
+-    resp = token_validator(request.headers.get('Authorization'))
+-    if "error" in resp:
+-        return Response(error_message_helper(resp), 401, mimetype="application/json")
++    user, error = get_authenticated_user(request.headers.get('Authorization'))
++    if error is not None:
++        return error
++    if username != user.username:
++        return forbidden_response()
++
++    if vuln:  # Regex DoS
++        match = re.search(
++            r"^([0-9a-zA-Z]([-.\w]*[0-9a-zA-Z])*@{1}([0-9a-zA-Z][-\w]*[0-9a-zA-Z]\.)+[a-zA-Z]{2,9})$",
++            str(request_data.get('email')))
++        if not match:
++            return Response(error_message_helper("Please Provide a valid email address."), 400,
++                            mimetype="application/json")
+     else:
+-        user = User.query.filter_by(username=resp['sub']).first()
+-        if vuln:  # Regex DoS
+-            match = re.search(
+-                r"^([0-9a-zA-Z]([-.\w]*[0-9a-zA-Z])*@{1}([0-9a-zA-Z][-\w]*[0-9a-zA-Z]\.)+[a-zA-Z]{2,9})$",
+-                str(request_data.get('email')))
+-            if match:
+-                user.email = request_data.get('email')
+-                db.session.commit()
+-                responseObject = {
+-                    'status': 'success',
+-                    'data': {
+-                        'username': user.username,
+-                        'email': user.email
+-                    }
+-                }
+-                return Response(json.dumps(responseObject), 204, mimetype="application/json")
+-            else:
+-                return Response(error_message_helper("Please Provide a valid email address."), 400,
+-                                mimetype="application/json")
+-        else:
+-            regex = '^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w{2,3}$'
+-            if (re.search(regex, request_data.get('email'))):
+-                user.email = request_data.get('email')
+-                db.session.commit()
+-                responseObject = {
+-                    'status': 'success',
+-                    'data': {
+-                        'username': user.username,
+-                        'email': user.email
+-                    }
+-                }
+-                return Response(json.dumps(responseObject), 204, mimetype="application/json")
+-            else:
+-                return Response(error_message_helper("Please Provide a valid email address."), 400,
+-                                mimetype="application/json")
++        regex = r'^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w{2,3}$'
++        if not re.search(regex, request_data.get('email')):
++            return Response(error_message_helper("Please Provide a valid email address."), 400,
++                            mimetype="application/json")
++
++    user.email = request_data.get('email')
++    db.session.commit()
++    responseObject = {
++        'status': 'success',
++        'data': {
++            'username': user.username,
++            'email': user.email
++        }
++    }
++    return Response(json.dumps(responseObject), 204, mimetype="application/json")
+ 
+ 
+ def update_password(username):
+-    request_data = request.get_json()
+-    resp = token_validator(request.headers.get('Authorization'))
+-    if "error" in resp:
+-        return Response(error_message_helper(resp), 401, mimetype="application/json")
+-    else:
+-        if request_data.get('password'):
+-            if vuln:  # Unauthorized update of password of another user
+-                user = User.query.filter_by(username=username).first()
+-                if user:
+-                    user.password = request_data.get('password')
+-                    db.session.commit()
+-                else:
+-                    return Response(error_message_helper("User Not Found"), 400, mimetype="application/json")
+-            else:
+-                user = User.query.filter_by(username=resp['sub']).first()
+-                user.password = request_data.get('password')
+-                db.session.commit()
+-            responseObject = {
+-                'status': 'success',
+-                'Password': 'Updated.'
+-            }
+-            return Response(json.dumps(responseObject), 204, mimetype="application/json")
+-        else:
+-            return Response(error_message_helper("Malformed Data"), 400, mimetype="application/json")
++    request_data = request.get_json(silent=True)
++    user, error = get_authenticated_user(request.headers.get('Authorization'))
++    if error is not None:
++        return error
++    if username != user.username:
++        return forbidden_response()
++    if not request_data or not request_data.get('password'):
++        return Response(error_message_helper("Malformed Data"), 400, mimetype="application/json")
++
++    user.password = request_data.get('password')
++    db.session.commit()
++    responseObject = {
++        'status': 'success',
++        'Password': 'Updated.'
++    }
++    return Response(json.dumps(responseObject), 204, mimetype="application/json")
+ 
+ 
+ def delete_user(username):
+-    resp = token_validator(request.headers.get('Authorization'))
+-    if "error" in resp:
+-        return Response(error_message_helper(resp), 401, mimetype="application/json")
+-    else:
+-        user = User.query.filter_by(username=resp['sub']).first()
+-        if user.admin:
+-            if bool(User.delete_user(username)):
+-                responseObject = {
+-                    'status': 'success',
+-                    'message': 'User deleted.'
+-                }
+-                return Response(json.dumps(responseObject), 200, mimetype="application/json")
+-            else:
+-                return Response(error_message_helper("User not found!"), 404, mimetype="application/json")
+-        else:
+-            return Response(error_message_helper("Only Admins may delete users!"), 401, mimetype="application/json")
++    user, error = get_admin_user(request.headers.get('Authorization'))
++    if error is not None:
++        return error
++    if username == user.username:
++        return forbidden_response()
++    if bool(User.delete_user(username)):
++        responseObject = {
++            'status': 'success',
++            'message': 'User deleted.'
++        }
++        return Response(json.dumps(responseObject), 200, mimetype="application/json")
++    return Response(error_message_helper("User not found!"), 404, mimetype="application/json")
+diff --git a/VAmPI/models/books_model.py b/VAmPI/models/books_model.py
+index 5ee202f..c5631d5 100644
+--- a/VAmPI/models/books_model.py
++++ b/VAmPI/models/books_model.py
+@@ -26,3 +26,7 @@ class Book(db.Model):
+     @staticmethod
+     def get_all_books():
+         return [Book.json(user) for user in Book.query.all()]
++
++    @staticmethod
++    def get_books_for_user(user_id):
++        return [Book.json(book) for book in Book.query.filter_by(user_id=user_id).all()]
+diff --git a/VAmPI/models/user_model.py b/VAmPI/models/user_model.py
+index 9c9d8f8..799c09a 100644
+--- a/VAmPI/models/user_model.py
++++ b/VAmPI/models/user_model.py
+@@ -2,10 +2,9 @@ import datetime
+ import jwt
+ from sqlalchemy.orm import relationship
+ from config import db, vuln_app
+-from app import vuln, alive
++from app import alive
+ from models.books_model import Book
+ from random import randrange
+-from sqlalchemy.sql import text
+ 
+ 
+ class User(db.Model):
+@@ -60,33 +59,22 @@ class User(db.Model):
+         except jwt.InvalidTokenError:
+             return {'error': 'Invalid token. Please log in again.'}
+ 
+-    def json(self):
++    def profile_dto(self):
++        """Return the only fields allowed in a user profile response.
++
++        Keep this explicit whitelist separate from the SQLAlchemy model: the
++        model also contains password and administrative state, neither of
++        which belongs in a normal client response.
++        """
+         return {'username': self.username, 'email': self.email}
+ 
+-    def json_debug(self):
+-        return {'username': self.username, 'password': self.password, 'email': self.email, 'admin': self.admin}
++    def directory_dto(self):
++        """Return the minimum identifier needed by the admin directory."""
++        return {'username': self.username}
+ 
+     @staticmethod
+     def get_all_users():
+-        return [User.json(user) for user in User.query.all()]
+-
+-    @staticmethod
+-    def get_all_users_debug():
+-        return [User.json_debug(user) for user in User.query.all()]
+-
+-    @staticmethod
+-    def get_user(username):
+-        if vuln:  # SQLi Injection
+-            user_query = f"SELECT * FROM users WHERE username = '{username}'"
+-            query = db.session.execute(text(user_query))
+-            ret = query.fetchone()
+-            if ret:
+-                fin_query = '{"username": "%s", "email": "%s"}' % (ret[1], ret[3])
+-            else:
+-                fin_query = None
+-        else:
+-            fin_query = User.query.filter_by(username=username).first()
+-        return fin_query
++        return [user.directory_dto() for user in User.query.all()]
+ 
+     @staticmethod
+     def register_user(username, password, email, admin=False):
+diff --git a/VAmPI/openapi_specs/openapi3.yml b/VAmPI/openapi_specs/openapi3.yml
+index 2935129..52a6481 100644
+--- a/VAmPI/openapi_specs/openapi3.yml
++++ b/VAmPI/openapi_specs/openapi3.yml
+@@ -13,24 +13,6 @@ components:
+       bearerFormat: JWT
+       x-bearerInfoFunc: models.user_model.User.decode_auth_token
+ paths:
+-  /createdb:
+-    get:
+-      tags:
+-        - db-init
+-      summary: Creates and populates the database with dummy data
+-      description: Creates and populates the database with dummy data
+-      operationId: api_views.main.populate_db
+-      responses:
+-        '200':
+-          description: Creates and populates the database with dummy data
+-          content:
+-            application/json:
+-              schema:
+-                type: object
+-                properties:
+-                  message:
+-                    type: string
+-                    example: 'Database populated.'
+   /:
+     get:
+       tags:
+@@ -61,10 +43,12 @@ paths:
+                     example: 1
+   /users/v1:
+     get:
++      security:
++        - bearerAuth: [ ]
+       tags:
+         - users
+       summary: Retrieves all users
+-      description: Displays all users with basic information
++      description: Displays basic user information for backend-verified administrators only
+       operationId: api_views.users.get_all_users
+       responses:
+         '200':
+@@ -79,44 +63,13 @@ paths:
+                     items:
+                       type: object
+                       properties:
+-                        email:
+-                          type: string
+-                          example: 'mail1@mail.com'
+-                        username:
+-                          type: string
+-                          example: 'name1'
+-  /users/v1/_debug:
+-    get:
+-      tags:
+-        - users
+-      summary: Retrieves all details for all users
+-      description: Displays all details for all users
+-      operationId: api_views.users.debug
+-      responses:
+-        '200':
+-          description: See all details of the users
+-          content:
+-            application/json:
+-              schema:
+-                type: object
+-                properties:
+-                  users:
+-                    type: array
+-                    items:
+-                      type: object
+-                      properties:
+-                        admin:
+-                          type: boolean
+-                          example: false
+-                        email:
+-                          type: string
+-                          example: 'mail1@mail.com'
+-                        password:
+-                          type: string
+-                          example: 'pass1'
+                         username:
+                           type: string
+                           example: 'name1'
++        '401':
++          description: Missing, expired, or invalid token
++        '403':
++          description: Authenticated user is not a backend-verified administrator
+   /users/v1/register:
+     post:
+       tags:
+@@ -130,6 +83,7 @@ paths:
+           application/json:
+             schema:
+               type: object
++              additionalProperties: false
+               properties:
+                 username:
+                   type: string
+@@ -232,9 +186,6 @@ paths:
+                     data:
+                       type: object
+                       properties:
+-                        admin:
+-                          type: boolean
+-                          example: false
+                         email:
+                           type: string
+                           example: 'mail1@mail.com'
+@@ -262,10 +213,12 @@ paths:
+ 
+   /users/v1/{username}:
+     get:
++      security:
++        - bearerAuth: [ ]
+       tags:
+         - users
+       summary: Retrieves user by username
+-      description: Displays user by username
++      description: A user may retrieve their own profile; a backend-verified administrator may retrieve a profile
+       operationId: api_views.users.get_by_username
+       parameters:
+         - name: username
+@@ -303,6 +256,10 @@ paths:
+                   message:
+                     type: string
+                     example: 'User not found'
++        '401':
++          description: Missing, expired, or invalid token
++        '403':
++          description: Authenticated user may only retrieve their own profile
+ 
+     delete:
+       security:
+@@ -363,6 +320,8 @@ paths:
+                   message:
+                     type: string
+                     example: 'User not found!'
++        '403':
++          description: Authenticated user is not a backend-verified administrator, or attempted self-delete
+   /users/v1/{username}/email:
+     put:
+       security:
+@@ -370,7 +329,7 @@ paths:
+       tags:
+         - users
+       summary: Update users email
+-      description: Update a single users email
++      description: Update the authenticated user's own email only
+       operationId: api_views.users.update_email
+       parameters:
+         - name: username
+@@ -423,6 +382,8 @@ paths:
+                   message:
+                     type: string
+                     example: 'Invalid token. Please log in again.'
++        '403':
++          description: Authenticated user may only update their own email
+   /users/v1/{username}/password:
+     put:
+       security:
+@@ -430,7 +391,7 @@ paths:
+       tags:
+         - users
+       summary: Update users password
+-      description: Update users password
++      description: Update the authenticated user's own password only
+       operationId: api_views.users.update_password
+       parameters:
+         - name: username
+@@ -483,12 +444,16 @@ paths:
+                   message:
+                     type: string
+                     example: 'Invalid token. Please log in again.'
++        '403':
++          description: Authenticated user may only update their own password
+   /books/v1:
+     get:
++      security:
++        - bearerAuth: [ ]
+       tags:
+         - books
+       summary: Retrieves all books
+-      description: Retrieves all books
++      description: Retrieves only books owned by the authenticated user
+       operationId: api_views.books.get_all_books
+       responses:
+         '200':
+@@ -511,10 +476,8 @@ paths:
+                 Books:
+                   - book_title: 'bookTitle77'
+                     user: 'name1'
+-                  - book_title: 'bookTitle85'
+-                    user: 'name2'
+-                  - book_title: 'bookTitle47'
+-                    user: 'admin'
++        '401':
++          description: Missing, expired, or invalid token
+     post:
+       security:
+         - bearerAuth: [ ]
+@@ -582,6 +545,8 @@ paths:
+                   message:
+                     type: string
+                     example: 'Invalid token. Please log in again.'
++        '403':
++          description: Authenticated user is not permitted to create a book
+   /books/v1/{book_title}:
+     get:
+       security:
+@@ -649,3 +614,5 @@ paths:
+                   message:
+                     type: string
+                     example: 'Book not found!'
++        '403':
++          description: Authenticated user is not the book owner
+diff --git a/docs/access-control-matrix.md b/docs/access-control-matrix.md
+new file mode 100644
+index 0000000..5b22ca4
+--- /dev/null
++++ b/docs/access-control-matrix.md
+@@ -0,0 +1,38 @@
++# Access Control Matrix State B
++
++## Nguyên tắc thực thi
++
++Kong xác thực JWT và áp dụng ACL theo Consumer ở biên. Kong không biết quan hệ
++giữa một user và từng bản ghi VAmPI, vì vậy backend phải xác minh subject của
++JWT, tải user từ database và quyết định quyền cho từng request. Không dùng
++claim `role` do client gửi để cấp quyền admin; chỉ dùng `users.admin` trong
++database.
++
++`401` biểu thị token thiếu, sai, hết hạn hoặc subject không còn tương ứng với
++một user. `403` biểu thị token hợp lệ nhưng user không có quyền theo policy.
++
++| Route và action | Anonymous | Authenticated user | Admin được xác minh từ DB | Điều kiện backend |
++| --- | --- | --- | --- | --- |
++| `POST /users/v1/register` | Allow | Allow | Allow | Chỉ tạo standard user; body không được đặt `admin`. |
++| `POST /users/v1/login` | Allow | Allow | Allow | Xác thực username/password; issuance JWT. |
++| `GET /me` | Deny | Allow | Allow | Chỉ trả profile của subject hiện hành. |
++| `GET /users/v1/{username}` | Deny | Allow nếu `username == subject` | Allow | Admin lookup basic profile; user thường chỉ self. |
++| `PUT /users/v1/{username}/email` | Deny | Allow nếu `username == subject` | Allow nếu self | Không có cross-user update qua endpoint này. |
++| `PUT /users/v1/{username}/password` | Deny | Allow nếu `username == subject` | Allow nếu self | Không có cross-user password reset; token invalidation ở W3-BACKEND-04. |
++| `DELETE /users/v1/{username}` | Deny | Deny | Allow, trừ self-delete | Role lấy từ database; bảo toàn ít nhất admin đang đăng nhập. |
++| `GET /users/v1` | Deny | Deny | Allow | Danh sách tài khoản chỉ phục vụ quản trị; DTO whitelist chỉ trả `username`. |
++| `GET /users/v1/_debug` | Disabled | Disabled | Disabled | Route bị gỡ hoàn toàn; không có API trả password hoặc field debug. |
++| `GET /createdb` | Disabled | Disabled | Disabled | Destructive reset bị gỡ khỏi HTTP API; chỉ seed qua vận hành nội bộ. |
++| `GET /books/v1` | Deny | Allow | Allow | Chỉ liệt kê book của subject hiện hành. |
++| `POST /books/v1` | Deny | Allow | Allow | `user_id` lấy từ subject hiện hành, không từ request body. |
++| `GET /books/v1/{book_title}` | Deny | Allow nếu owner | Allow nếu owner | `book_title` và `user_id` nằm cùng truy vấn; không có admin bypass tại endpoint trả secret. |
++
++## Phạm vi và kiểm thử
++
++Matrix này áp dụng các decision ở backend cho mọi route nhạy cảm hiện có. Các
++route public chỉ là register/login. Route debug và database reset đã bị gỡ khỏi
++HTTP API. DTO whitelist trả profile chỉ với `username`, `email`, và directory
++quản trị chỉ với `username`; không tuần tự hóa password, hash, token, secret,
++hay cờ `admin` cho client. Kiểm thử regression của matrix, DTO/field filtering
++và token lifecycle được thực hiện lần lượt trong W3-BACKEND-03,
++W3-BACKEND-04 và W3-BACKEND-05.
+-- 
+2.56.0.windows.4
+

@@ -1,0 +1,174 @@
+From 05898680d5fe7205143213fd86216b2f8459b23e Mon Sep 17 00:00:00 2001
+From: QuyTran25 <tranhuynhlt46@gmail.com>
+Date: Tue, 17 Nov 2026 22:32:43 +0700
+Subject: =?UTF-8?q?W3-BACKEND-04:=20v=C3=B4=20hi=E1=BB=87u=20token=20sau?=
+ =?UTF-8?q?=20=C4=91=E1=BB=95i=20m=E1=BA=ADt=20kh=E1=BA=A9u?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ VAmPI/api_views/users.py         | 13 +++++++++++++
+ VAmPI/config.py                  | 23 +++++++++++++++++++++++
+ VAmPI/models/user_model.py       | 12 ++++++++++--
+ VAmPI/openapi_specs/openapi3.yml |  7 +++++--
+ docs/access-control-matrix.md    |  2 +-
+ 5 files changed, 52 insertions(+), 5 deletions(-)
+
+diff --git a/VAmPI/api_views/users.py b/VAmPI/api_views/users.py
+index a11a284..5140644 100644
+--- a/VAmPI/api_views/users.py
++++ b/VAmPI/api_views/users.py
+@@ -45,6 +45,15 @@ def get_authenticated_user(auth_header):
+     if not user:
+         return None, unauthorized_response()
+ 
++    # A token remains cryptographically valid until exp, so signature checking
++    # alone cannot revoke it after a password change. Reject a missing,
++    # malformed, or stale version using the server-side account record.
++    token_version = payload.get('token_version')
++    if isinstance(token_version, bool) or not isinstance(token_version, int):
++        return None, unauthorized_response()
++    if token_version != user.token_version:
++        return None, unauthorized_response()
++
+     return user, None
+ 
+ 
+@@ -218,6 +227,10 @@ def update_password(username):
+         return Response(error_message_helper("Malformed Data"), 400, mimetype="application/json")
+ 
+     user.password = request_data.get('password')
++    # Revoke every previously issued access token for this user. The request
++    # itself was authenticated before the increment; subsequent requests must
++    # authenticate again and receive a JWT carrying the new version.
++    user.token_version += 1
+     db.session.commit()
+     responseObject = {
+         'status': 'success',
+diff --git a/VAmPI/config.py b/VAmPI/config.py
+index c64ca8e..f9be1c6 100644
+--- a/VAmPI/config.py
++++ b/VAmPI/config.py
+@@ -3,6 +3,7 @@ import connexion
+ from flask import jsonify
+ from flask_sqlalchemy import SQLAlchemy
+ from connexion.exceptions import ProblemException
++from sqlalchemy import inspect, text
+ 
+ vuln_app = connexion.App(__name__, specification_dir='./openapi_specs')
+ 
+@@ -21,6 +22,28 @@ vuln_app.app.config['JWT_ISSUER'] = os.getenv('VAMPI_JWT_ISSUER', 'vampi-state-b
+ # start the db
+ db = SQLAlchemy(vuln_app.app)
+ 
++
++def migrate_token_version_column():
++    """Apply the small, idempotent SQLite migration required by State B.
++
++    State B keeps the existing lab database in a bind mount. SQLAlchemy does
++    not add new columns to an existing SQLite table automatically, so create
++    ``token_version`` once without dropping user data.
++    """
++    with vuln_app.app.app_context():
++        inspector = inspect(db.engine)
++        if 'users' not in inspector.get_table_names():
++            return
++        columns = {column['name'] for column in inspector.get_columns('users')}
++        if 'token_version' not in columns:
++            db.session.execute(text(
++                'ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0'
++            ))
++            db.session.commit()
++
++
++migrate_token_version_column()
++
+ def custom_problem_handler(error):
+     # Custom error handler for clarity in structure
+     response = jsonify({
+diff --git a/VAmPI/models/user_model.py b/VAmPI/models/user_model.py
+index 799c09a..a35b5ed 100644
+--- a/VAmPI/models/user_model.py
++++ b/VAmPI/models/user_model.py
+@@ -14,6 +14,9 @@ class User(db.Model):
+     password = db.Column(db.String(128), nullable=False)
+     email = db.Column(db.String(128), nullable=False)
+     admin = db.Column(db.Boolean, nullable=False, default=False)
++    # State B: incrementing this revokes every JWT issued before a password
++    # change without rotating the deployment-wide signing key.
++    token_version = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+ 
+     books = relationship("Book", order_by=Book.id, back_populates="user")
+ 
+@@ -22,6 +25,7 @@ class User(db.Model):
+         self.email = email
+         self.password = password
+         self.admin = admin
++        self.token_version = 0
+ 
+     def __repr__(self):
+         return f'{{"username": "{self.username}", "email": "{self.email}"}}'
+@@ -34,7 +38,10 @@ class User(db.Model):
+                 'sub': user_id,
+                 # Kong JWT integration: `iss` selects the Kong JWT credential.
+                 # It is an infrastructure identifier, not a business-role claim.
+-                'iss': vuln_app.app.config.get('JWT_ISSUER')
++                'iss': vuln_app.app.config.get('JWT_ISSUER'),
++                # Backend token-lifecycle control. Kong validates the JWT
++                # signature; VAmPI compares this value with its database.
++                'token_version': self.token_version,
+             }
+             return jwt.encode(
+                 payload,
+@@ -51,7 +58,8 @@ class User(db.Model):
+                 auth_token,
+                 vuln_app.app.config.get('SECRET_KEY'),
+                 algorithms=["HS256"],
+-                issuer=vuln_app.app.config.get('JWT_ISSUER')
++                issuer=vuln_app.app.config.get('JWT_ISSUER'),
++                options={'require': ['exp', 'iat', 'iss', 'sub', 'token_version']}
+             )
+             return payload
+         except jwt.ExpiredSignatureError:
+diff --git a/VAmPI/openapi_specs/openapi3.yml b/VAmPI/openapi_specs/openapi3.yml
+index 52a6481..dd56010 100644
+--- a/VAmPI/openapi_specs/openapi3.yml
++++ b/VAmPI/openapi_specs/openapi3.yml
+@@ -391,7 +391,10 @@ paths:
+       tags:
+         - users
+       summary: Update users password
+-      description: Update the authenticated user's own password only
++      description: >-
++        Update the authenticated user's own password only. A successful change
++        increments the server-side token version; all access tokens issued
++        before the change are rejected by VAmPI and the user must log in again.
+       operationId: api_views.users.update_password
+       parameters:
+         - name: username
+@@ -431,7 +434,7 @@ paths:
+                     type: string
+                     example: 'Malformed Data'
+         '401':
+-          description: User not authorized
++          description: Missing, expired, invalid, or revoked token
+           content:
+             application/json:
+               schema:
+diff --git a/docs/access-control-matrix.md b/docs/access-control-matrix.md
+index 5b22ca4..2cda6ca 100644
+--- a/docs/access-control-matrix.md
++++ b/docs/access-control-matrix.md
+@@ -18,7 +18,7 @@ một user. `403` biểu thị token hợp lệ nhưng user không có quyền t
+ | `GET /me` | Deny | Allow | Allow | Chỉ trả profile của subject hiện hành. |
+ | `GET /users/v1/{username}` | Deny | Allow nếu `username == subject` | Allow | Admin lookup basic profile; user thường chỉ self. |
+ | `PUT /users/v1/{username}/email` | Deny | Allow nếu `username == subject` | Allow nếu self | Không có cross-user update qua endpoint này. |
+-| `PUT /users/v1/{username}/password` | Deny | Allow nếu `username == subject` | Allow nếu self | Không có cross-user password reset; token invalidation ở W3-BACKEND-04. |
++| `PUT /users/v1/{username}/password` | Deny | Allow nếu `username == subject` | Allow nếu self | Không có cross-user password reset; tăng `token_version`, khiến mọi token cũ bị backend từ chối; user phải đăng nhập lại. |
+ | `DELETE /users/v1/{username}` | Deny | Deny | Allow, trừ self-delete | Role lấy từ database; bảo toàn ít nhất admin đang đăng nhập. |
+ | `GET /users/v1` | Deny | Deny | Allow | Danh sách tài khoản chỉ phục vụ quản trị; DTO whitelist chỉ trả `username`. |
+ | `GET /users/v1/_debug` | Disabled | Disabled | Disabled | Route bị gỡ hoàn toàn; không có API trả password hoặc field debug. |
+-- 
+2.56.0.windows.4
+
